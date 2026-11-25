@@ -1,6 +1,6 @@
 import { db, auth } from './store.js';
 import { DEMO_MODE } from './config.js';
-import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors } from './data.js';
+import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
 import { t, getLang, setLang, nameOf } from './i18n.js';
 
 // ---------- helpers ----------
@@ -49,18 +49,19 @@ async function loadSession(u) {
 const NAV = {
   guest: [['#/', 'home', '🏠'], ['#/explore', 'explore', '🔍'], ['#/events', 'events', '💍'], ['#/bookings', 'bookings', '📒'], ['#/profile', 'profile', '👤']],
   customer: [['#/', 'home', '🏠'], ['#/explore', 'explore', '🔍'], ['#/events', 'events', '💍'], ['#/bookings', 'bookings', '📒'], ['#/profile', 'profile', '👤']],
-  vendor: [['#/vendor', 'dashboard', '📊'], ['#/vendor/enquiries', 'enquiries', '✉️'], ['#/vendor/bookings', 'bookings', '📒'], ['#/vendor/services', 'services', '🧾'], ['#/profile', 'profile', '👤']],
-  admin: [['#/admin', 'dashboard', '📊'], ['#/admin/vendors', 'Vendors', '🏪'], ['#/admin/customers', 'Customers', '👥'], ['#/admin/enquiries', 'enquiries', '✉️'], ['#/profile', 'profile', '👤']],
+  vendor: [['#/vendor', 'dashboard', '📊'], ['#/vendor/enquiries', 'enquiries', '✉️'], ['#/vendor/calendar', 'calendar', '📅'], ['#/vendor/services', 'services', '🧾'], ['#/profile', 'profile', '👤']],
+  admin: [['#/admin', 'dashboard', '📊'], ['#/admin/vendors', 'venues', '🏛️'], ['#/admin/customers', 'Customers', '👥'], ['#/admin/enquiries', 'enquiries', '✉️'], ['#/profile', 'profile', '👤']],
 };
 
 function shell(inner) {
-  const nav = NAV[role()] || NAV.guest;
+  let nav = NAV[role()] || NAV.guest;
+  if (role() === 'vendor' && isVenue(S.vendor)) nav = nav.map((n) => (n[1] === 'services' ? [n[0], 'venue', '🏛️'] : n));
   const path = location.hash.split('?')[0] || '#/';
   const active = (h) => (h === '#/' ? path === '#/' || path === '' : path === h || (path.startsWith(h + '/') && !nav.some(([x]) => x !== h && path.startsWith(x) && x.length > h.length)));
   return `
   ${DEMO_MODE ? `<div class="demo-banner">${t('demoBanner')}</div>` : ''}
   <header class="topbar"><div class="wrap">
-    <a class="brand" href="#/">Manga<span>lyam</span></a>
+    <a class="brand" href="#/">Hall<span>Hub</span></a>
     <div class="row">
       <button class="lang-toggle" data-act="lang">${getLang() === 'en' ? 'മലയാളം' : 'English'}</button>
       ${S.user ? '' : `<a class="btn sm" href="#/login">${t('login')}</a>`}
@@ -76,7 +77,35 @@ function coverStyle(v) {
   const [a, b] = v.palette || ['#6e1a26', '#b8914a'];
   return `background:linear-gradient(135deg,${a},${b})`;
 }
-function vendorCard(v) {
+// ---------- slots & calendar ----------
+const slotName = (id) => { const x = slotById(id); return x ? nameOf(x) : id; };
+const slotLabel = (id) => { const x = slotById(id); return x ? `${nameOf(x)} (${x.time})` : id; };
+function takenMap(rows) { const m = {}; rows.forEach((r) => { (m[r.date] = m[r.date] || []).push(r.half); }); return m; }
+async function venueSlots(venueId) { return db.list('slots', ['venueId', venueId]); }
+function calendarHTML(ym, taken, { selected = '', pickable = true } = {}) {
+  const [y, m] = ym.split('-').map(Number);
+  const first = new Date(y, m - 1, 1); const days = new Date(y, m, 0).getDate();
+  const lead = (first.getDay() + 6) % 7; const tdy = today();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<div></div>');
+  for (let d = 1; d <= days; d++) {
+    const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const tk = taken[ds] || []; const past = ds < tdy;
+    const cls = past ? 'past' : tk.length >= 2 ? 'd-full' : tk.length === 1 ? 'd-half' : 'd-free';
+    const dots = `<i class="${tk.includes('morning') ? 'x' : ''}"></i><i class="${tk.includes('evening') ? 'x' : ''}"></i>`;
+    cells.push(`<button type="button" class="day ${cls} ${ds === selected ? 'sel' : ''}" ${past || !pickable ? 'disabled' : ''} data-day="${ds}">${d}<span>${past ? '' : dots}</span></button>`);
+  }
+  const title = first.toLocaleDateString(getLang() === 'ml' ? 'ml-IN' : 'en-IN', { month: 'long', year: 'numeric' });
+  return `<div class="cal"><div class="row between cal-head"><button type="button" class="btn sm ghost" data-cal="-1">‹</button><b>${title}</b><button type="button" class="btn sm ghost" data-cal="1">›</button></div>
+    <div class="cal-grid">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((x) => `<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>
+    <div class="row wrap-x small muted cal-key"><span><i class="k k-free"></i>${t('available')}</span><span><i class="k k-half"></i>Half booked</span><span><i class="k k-full"></i>${t('booked')}</span><span>Dots: morning · evening</span></div></div>`;
+}
+const addMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+function venueFacts(v) {
+  return `<div class="facts"><div><b>${(v.seating || 0).toLocaleString('en-IN')}</b><span>${t('seating')}</span></div><div><b>${(v.dining || 0).toLocaleString('en-IN')}</b><span>${t('dining')}</span></div><div><b>${v.parking || 0}</b><span>${t('parking')}</span></div></div>`;
+}
+
+function vendorCard(v, avail) {
   const cat = catById(v.category);
   return `<a class="vcard" href="#/v/${v.id}">
     <div class="cover" style="${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph">${cat?.icon || '✨'}</div>`}
@@ -85,7 +114,8 @@ function vendorCard(v) {
     <div class="vbody">
       <div class="vname">${esc(v.businessName)}</div>
       <div class="vmeta">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}</div>
-      <div class="small muted">${esc((v.description || '').slice(0, 90))}…</div>
+      ${isVenue(v) ? `${venueFacts(v)}<div class="small muted">${esc(v.ac || '')} · ${esc(v.catering || '')}</div>` : `<div class="small muted">${esc((v.description || '').slice(0, 90))}…</div>`}
+      ${avail ? `<div class="small" style="font-weight:700;color:${avail.ok ? 'var(--ok)' : 'var(--bad)'}">${avail.ok ? '✔ ' + t('available') : '✕ ' + t('booked')} · ${esc(avail.label)}</div>` : ''}
       <div class="row between" style="margin-top:auto;padding-top:6px">
         <span class="small">${t('startingAt')} <span class="price">${money(v.startingPrice)}</span>${esc(v.priceUnit || '')}</span>
         <span class="stars">★ ${Number(v.rating || 0).toFixed(1)} <span class="muted small">(${v.reviewCount || 0})</span></span>
@@ -126,42 +156,46 @@ const DESTINATIONS = [
 
 async function viewHome() {
   const vs = await approvedVendors();
-  const featured = vs.filter((v) => v.featured).slice(0, 8);
-  const recent = [...vs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4);
-  const offers = vs.filter((v) => v.offer).slice(0, 4);
+  const venues = vs.filter(isVenue);
+  const featured = venues.filter((v) => v.featured).slice(0, 8);
+  const recent = [...venues].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4);
+  const offers = venues.filter((v) => v.offer).slice(0, 4);
+  const services = vs.filter((v) => !isVenue(v)).slice(0, 8);
+  const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
     html: `
     <section class="hero"><div class="wrap">
-      <p style="letter-spacing:2px;font-size:.75rem;text-transform:uppercase;margin-bottom:6px">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'Kerala · Weddings & Events'}</p>
+      <p style="letter-spacing:2px;font-size:.75rem;text-transform:uppercase;margin-bottom:6px">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'Kerala · Auditoriums & Halls'}</p>
       <h1>${t('tagline')}</h1>
-      <p>Photographers, sadya, chenda melam, houseboats and more across all 14 districts.</p>
+      <p>See which halls are free on your date — morning, evening or full day — across all 14 districts.</p>
       <form class="search" id="homeSearch">
-        <input name="q" placeholder="${t('searchPh')}">
         <select name="district"><option value="">${t('allDistricts')}</option>${DISTRICTS.map((d) => `<option value="${d.id}">${nameOf(d)}</option>`).join('')}</select>
-        <button class="btn">${t('search')}</button>
+        <input type="date" name="date" min="${today()}" aria-label="${t('date')}">
+        <select name="slot">${SLOTS.map((x) => `<option value="${x.id}">${nameOf(x)}</option>`).join('')}</select>
+        <input type="number" name="guests" min="1" placeholder="${t('guests')}">
+        <button class="btn">${t('checkAvail')}</button>
       </form>
     </div></section>
     <div class="wrap">
       <section class="section">
-        <div class="section-head"><h2>${t('categories')}</h2></div>
-        <div class="chips" id="grpChips">${CATEGORY_GROUPS.map((g, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-grp="${g.id}">${nameOf(g)}</button>`).join('')}</div>
-        <div class="cat-grid" id="catGrid" style="margin-top:10px"></div>
+        <div class="section-head"><h2>${t('venues')}</h2></div>
+        <div class="cat-grid">${types.map((c) => `<a class="cat" href="#/explore?cat=${c.id}"><span class="ic">${c.icon}</span>${esc(c.en)}</a>`).join('')}</div>
       </section>
       <section class="section"><div class="section-head"><h2>${t('featured')}</h2><a href="#/explore?sort=popular">${t('viewAll')}</a></div>
-        <div class="grid">${featured.map(vendorCard).join('')}</div></section>
+        <div class="grid">${featured.map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('destinations')}</h2></div>
         <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${DESTINATIONS.map(([n, d, a, b]) => `<a class="dest" href="#/explore?district=${d}" style="background:linear-gradient(160deg,${a},${b})"><b>${n}</b><span class="small">${distName(d)}</span></a>`).join('')}</div></section>
-      ${offers.length ? `<section class="section"><div class="section-head"><h2>Special offers</h2></div><div class="grid">${offers.map(vendorCard).join('')}</div></section>` : ''}
-      <section class="section"><div class="section-head"><h2>${t('recent')}</h2></div><div class="grid">${recent.map(vendorCard).join('')}</div></section>
+      ${offers.length ? `<section class="section"><div class="section-head"><h2>Special offers</h2></div><div class="grid">${offers.map((v) => vendorCard(v)).join('')}</div></section>` : ''}
+      <section class="section"><div class="section-head"><h2>${t('recent')}</h2></div><div class="grid">${recent.map((v) => vendorCard(v)).join('')}</div></section>
+      <section class="section"><div class="section-head"><h2>${t('addons')}</h2><a href="#/explore?kind=services">${t('viewAll')}</a></div>
+        <div class="chips">${CATEGORIES.filter((c) => c.group !== 'venues').map((c) => `<a class="chip" href="#/explore?cat=${c.id}">${c.icon} ${esc(c.en)}</a>`).join('')}</div>
+        <div class="grid" style="margin-top:10px">${services.slice(0, 4).map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('reviewsTitle')}</h2></div>
         <div class="grid">${SEED_REVIEWS.map((r) => `<div class="card"><div class="stars">${'★'.repeat(r.rating)}</div><p style="font-family:var(--serif);font-size:1.15rem;margin:.4em 0">“${esc(r.text)}”</p><div class="small muted">${esc(r.name)} · ${esc(r.district)} <span class="badge demo">Demo</span></div></div>`).join('')}</div></section>
-      <section class="section card center stack"><h2>Are you a wedding or event vendor?</h2><p class="muted">List your business free, receive enquiries and send quotations from one dashboard.</p><a class="btn gold" href="#/vendor/register">Register your business</a></section>
+      <section class="section card center stack"><h2>Own an auditorium or hall?</h2><p class="muted">List it free, manage your booking calendar and send quotations from one dashboard.</p><a class="btn gold" href="#/vendor/register">List your venue</a></section>
     </div>`,
     mount() {
-      const drawCats = (g) => { $('#catGrid').innerHTML = CATEGORIES.filter((c) => c.group === g).map((c) => `<a class="cat" href="#/explore?cat=${c.id}"><span class="ic">${c.icon}</span>${esc(c.en)}</a>`).join(''); };
-      drawCats('wedding');
-      $('#grpChips').onclick = (e) => { const b = e.target.closest('[data-grp]'); if (!b) return; $$('#grpChips .chip').forEach((x) => x.classList.toggle('on', x === b)); drawCats(b.dataset.grp); };
-      $('#homeSearch').onsubmit = (e) => { e.preventDefault(); const f = formData(e.target); go(`#/explore?q=${encodeURIComponent(f.q)}&district=${f.district}`); };
+      $('#homeSearch').onsubmit = (e) => { e.preventDefault(); const f = formData(e.target); go('#/explore?' + new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString()); };
     },
   };
 }
@@ -169,10 +203,15 @@ async function viewHome() {
 async function viewExplore(params) {
   const vs = await approvedVendors();
   const p = Object.fromEntries(params);
+  const services = p.kind === 'services' || (p.cat && !isVenue({ category: p.cat }));
   const sel = (name, opts, cur, all) => `<select name="${name}"><option value="">${all}</option>${opts.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   const towns = p.district ? districtById(p.district)?.towns || [] : [];
   const q = (p.q || '').toLowerCase().trim();
+  const slot = p.slot || 'full';
+  const dayRows = p.date ? await db.list('slots', ['date', p.date]) : [];
+  const venueTaken = (id) => dayRows.filter((r) => r.venueId === id).map((r) => r.half);
   let rows = vs.filter((v) => {
+    if (services ? isVenue(v) : !isVenue(v)) return false;
     if (q && !(`${v.businessName} ${catName(v.category)} ${v.town} ${v.description}`.toLowerCase().includes(q))) return false;
     if (p.cat && v.category !== p.cat) return false;
     if (p.district && v.district !== p.district && !(v.serviceDistricts || []).includes(p.district)) return false;
@@ -180,29 +219,42 @@ async function viewExplore(params) {
     if (p.max && Number(v.startingPrice) > Number(p.max)) return false;
     if (p.rating && Number(v.rating) < Number(p.rating)) return false;
     if (p.verified && !v.verified) return false;
-    if (p.date && (v.blockedDates || []).includes(p.date)) return false;
-    if (p.budget && !(v.packages || []).some((k) => Number(k.price) <= Number(p.budget))) return false;
+    if (p.guests && isVenue(v) && Number(v.seating) < Number(p.guests)) return false;
+    if (p.ac && v.ac !== p.ac) return false;
+    if (p.catering && v.catering !== p.catering && v.catering !== 'In-house or outside') return false;
+    if (p.parking && Number(v.parking || 0) < Number(p.parking)) return false;
+    if (p.date && !isVenue(v) && (v.blockedDates || []).includes(p.date)) return false;
+    if (p.date && isVenue(v) && p.onlyFree !== '0' && !slotFree(venueTaken(v.id), slot)) return false;
     return true;
   });
-  const sorts = { popular: (a, b) => (b.reviewCount + b.views / 10) - (a.reviewCount + a.views / 10), price_asc: (a, b) => a.startingPrice - b.startingPrice, price_desc: (a, b) => b.startingPrice - a.startingPrice, rating: (a, b) => b.rating - a.rating };
+  const priceOf = (v) => (isVenue(v) && v.slotPrices ? v.slotPrices[slot] || v.startingPrice : v.startingPrice);
+  const sorts = { popular: (a, b) => (b.reviewCount + b.views / 10) - (a.reviewCount + a.views / 10), price_asc: (a, b) => priceOf(a) - priceOf(b), price_desc: (a, b) => priceOf(b) - priceOf(a), rating: (a, b) => b.rating - a.rating, capacity: (a, b) => (b.seating || 0) - (a.seating || 0) };
   rows.sort(sorts[p.sort] || ((a, b) => (b.featured - a.featured) || (b.rating - a.rating)));
+  const cats = CATEGORIES.filter((c) => (services ? c.group !== 'venues' : c.group === 'venues'));
+  const card = (v) => vendorCard(v, p.date && isVenue(v) ? { ok: slotFree(venueTaken(v.id), slot), label: `${fmtDate(p.date)} · ${slotName(slot)} · ${money(priceOf(v))}` } : null);
   return {
     html: `<div class="wrap" style="padding-top:16px">
-      <h1>${p.cat ? esc(catName(p.cat)) : t('explore')}</h1>
+      <div class="tabs"><a class="chip ${services ? '' : 'on'}" href="#/explore">🏛️ ${t('venues')}</a><a class="chip ${services ? 'on' : ''}" href="#/explore?kind=services">✨ Other services</a></div>
+      <h1>${p.cat ? esc(catName(p.cat)) : services ? 'Event services' : 'Auditoriums & halls'}</h1>
       <form id="flt" class="filters">
+        ${services ? '<input type="hidden" name="kind" value="services">' : ''}
         <input name="q" placeholder="${t('searchPh')}" value="${esc(p.q || '')}" class="full">
-        ${sel('cat', CATEGORIES.map((c) => [c.id, c.en]), p.cat, 'All categories')}
+        ${sel('cat', cats.map((c) => [c.id, c.en]), p.cat, services ? 'All services' : 'All venue types')}
         ${sel('district', DISTRICTS.map((d) => [d.id, nameOf(d)]), p.district, t('allDistricts'))}
         ${sel('town', towns.map((x) => [x, x]), p.town, 'All towns')}
-        ${sel('max', [['10000', 'Under ₹10,000'], ['25000', 'Under ₹25,000'], ['50000', 'Under ₹50,000'], ['100000', 'Under ₹1 lakh'], ['300000', 'Under ₹3 lakh']], p.max, 'Any starting price')}
-        ${sel('budget', [['20000', 'Package ≤ ₹20,000'], ['50000', 'Package ≤ ₹50,000'], ['100000', 'Package ≤ ₹1 lakh']], p.budget, 'Any package budget')}
+        <input type="date" name="date" min="${today()}" value="${esc(p.date || '')}" title="${t('date')}">
+        ${services ? '' : `<select name="slot">${SLOTS.map((x) => `<option value="${x.id}" ${x.id === slot ? 'selected' : ''}>${nameOf(x)}</option>`).join('')}</select>
+        <input type="number" name="guests" min="1" placeholder="${t('guests')}" value="${esc(p.guests || '')}">
+        ${sel('ac', AC_TYPES.map((x) => [x, x]), p.ac, 'AC or non-AC')}
+        ${sel('catering', [['Outside caterers allowed', 'Outside caterers allowed'], ['In-house catering only', 'In-house catering']], p.catering, 'Any catering rule')}
+        ${sel('parking', [['50', '50+ cars'], ['150', '150+ cars'], ['300', '300+ cars']], p.parking, 'Any parking')}`}
+        ${sel('max', services ? [['10000', 'Under ₹10,000'], ['50000', 'Under ₹50,000']] : [['25000', 'Under ₹25,000 / slot'], ['50000', 'Under ₹50,000 / slot'], ['100000', 'Under ₹1 lakh / slot'], ['200000', 'Under ₹2 lakh / slot']], p.max, 'Any price')}
         ${sel('rating', [['4.5', '4.5★ & up'], ['4', '4★ & up']], p.rating, 'Any rating')}
-        <input type="date" name="date" value="${esc(p.date || '')}" title="Available on">
-        ${sel('sort', [['popular', 'Most popular'], ['rating', 'Top rated'], ['price_asc', 'Price: low to high'], ['price_desc', 'Price: high to low']], p.sort, 'Recommended')}
+        ${sel('sort', [['popular', 'Most popular'], ['rating', 'Top rated'], ['price_asc', 'Price: low to high'], ['price_desc', 'Price: high to low'], ...(services ? [] : [['capacity', 'Largest capacity']])], p.sort, 'Recommended')}
         <label class="row" style="margin:0;font-weight:600;color:var(--ink)"><input type="checkbox" name="verified" value="1" ${p.verified ? 'checked' : ''} style="width:auto"> Verified only</label>
       </form>
-      <p class="muted small">${rows.length} vendor${rows.length === 1 ? '' : 's'}${p.date ? ' available on ' + fmtDate(p.date) : ''}</p>
-      <div class="grid">${rows.map(vendorCard).join('') || `<div class="empty full">${t('noResults')}</div>`}</div>
+      <p class="muted small">${rows.length} ${services ? 'service' : 'venue'}${rows.length === 1 ? '' : 's'}${p.date && !services ? ` free on ${fmtDate(p.date)} · ${slotLabel(slot)}` : ''}</p>
+      <div class="grid">${rows.map(card).join('') || `<div class="empty full">${t('noResults')}${p.date ? ' Try another date or slot.' : ''}</div>`}</div>
     </div>`,
     mount() {
       const f = $('#flt');
@@ -217,7 +269,10 @@ async function viewVendor(id) {
   if (!v || (v.status !== 'approved' && role() !== 'admin' && S.user?.uid !== v.ownerId)) return { html: `<div class="wrap empty">Vendor not found.</div>` };
   if (S.user && S.user.uid !== v.ownerId) db.update('vendors', id, { views: (v.views || 0) + 1 }).catch(() => {});
   const fav = (S.profile?.favourites || []).includes(id);
-  const wa = v.whatsapp ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Hi ${v.businessName}, I found you on Mangalyam and would like to enquire about your services.`)}` : '';
+  const venue = isVenue(v);
+  const taken = venue ? takenMap(await venueSlots(id)) : {};
+  let ym = today().slice(0, 7); let pickDate = ''; let pickSlot = '';
+  const wa = v.whatsapp ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Hi ${v.businessName}, I found you on HallHub and would like to enquire about your services.`)}` : '';
   return {
     html: `
     <div class="cover" style="height:220px;${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '✨'}</div>`}
@@ -230,19 +285,42 @@ async function viewVendor(id) {
         <button class="btn ghost sm" data-act="fav" data-id="${id}">${fav ? '♥ Saved' : '♡ Save'}</button>
       </div>
       <div class="card row between wrap-x"><div><div class="small muted">${t('startingAt')}</div><div class="price" style="font-size:1.4rem">${money(v.startingPrice)}<span class="small muted">${esc(v.priceUnit || '')}</span></div></div>
-        <div class="row wrap-x"><a class="btn" href="#/enquire/${id}">${t('requestQuote')}</a>${wa ? `<a class="btn green" target="_blank" rel="noopener" href="${wa}">${t('whatsapp')}</a>` : ''}${v.phone ? `<a class="btn ghost" href="tel:${esc(v.phone.replace(/\s/g, ''))}">Call</a>` : ''}</div></div>
+        <div class="row wrap-x"><a class="btn" href="${venue ? '#cal' : '#/enquire/' + id}" ${venue ? 'data-act="toCal"' : ''}>${venue ? t('checkAvail') : t('requestQuote')}</a>${wa ? `<a class="btn green" target="_blank" rel="noopener" href="${wa}">${t('whatsapp')}</a>` : ''}${v.phone ? `<a class="btn ghost" href="tel:${esc(v.phone.replace(/\s/g, ''))}">Call</a>` : ''}</div></div>
       ${v.offer ? `<div class="card" style="background:#eef7f0;border-color:#cfe6d6">🎁 <b>Offer:</b> ${esc(v.offer)}</div>` : ''}
       <div class="card"><h3>${t('about')}</h3><p style="margin:0">${esc(v.description)}</p>
         ${v.traditions?.length ? `<p class="small muted" style="margin:.6em 0 0">Experienced with: ${v.traditions.map(esc).join(', ')} ceremonies</p>` : ''}</div>
-      <div><h2>${t('packages')}</h2><div class="grid">${(v.packages || []).map((k) => `<div class="pkg"><div class="row between"><h3 style="margin:0">${esc(k.name)}</h3><span class="price">${money(k.price)}<span class="small muted">${esc(k.unit || '')}</span></span></div><ul>${(k.inclusions || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul><a class="btn sm ghost" style="margin-top:10px" href="#/enquire/${id}?pkg=${k.id}">Enquire for this package</a></div>`).join('') || '<p class="muted">No packages yet — request a custom quotation.</p>'}</div></div>
+      ${venue ? `<div class="card stack"><h3 style="margin:0">Capacity & facilities</h3>${venueFacts(v).replace('class="facts"', 'class="facts big"')}
+        <table class="cmp"><tr><td>Hall type</td><td>${esc(catName(v.category))}</td></tr><tr><td>Air-conditioning</td><td>${esc(v.ac)}</td></tr><tr><td>Catering</td><td>${esc(v.catering)}</td></tr><tr><td>Bridal / green rooms</td><td>${v.rooms || 0}</td></tr></table>
+        <div class="amen">${(v.amenities || []).map((a) => `<span>✓ ${esc(a)}</span>`).join('')}</div></div>
+      <div class="card"><h3>Hall rent</h3><table class="cmp">${SLOTS.map((x) => `<tr><td>${nameOf(x)} <span class="small muted">${x.time}</span></td><td class="price">${v.slotPrices?.[x.id] ? money(v.slotPrices[x.id]) : '—'}</td></tr>`).join('')}</table>
+        <p class="small muted" style="margin:.6em 0 0">Rent for the hall only. Catering, decoration and electricity beyond the slot are quoted separately.</p></div>
+      <div class="card stack" id="cal"><h3 style="margin:0">${t('checkAvail')}</h3><div id="calBox"></div><div id="slotBox"></div></div>` : ''}
+      ${venue ? '' : `<div><h2>${t('packages')}</h2><div class="grid">${(v.packages || []).map((k) => `<div class="pkg"><div class="row between"><h3 style="margin:0">${esc(k.name)}</h3><span class="price">${money(k.price)}<span class="small muted">${esc(k.unit || '')}</span></span></div><ul>${(k.inclusions || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul><a class="btn sm ghost" style="margin-top:10px" href="#/enquire/${id}?pkg=${k.id}">Enquire for this package</a></div>`).join('') || '<p class="muted">No packages yet — request a custom quotation.</p>'}</div></div>`}
       ${v.portfolio?.length ? `<div><h2>Portfolio</h2><div class="gallery">${v.portfolio.map((src) => `<img src="${src}" alt="Portfolio">`).join('')}</div></div>` : ''}
       ${v.videos?.length ? `<div class="card"><h3>Videos</h3>${v.videos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join('<br>')}</div>` : ''}
-      <div class="card"><h3>${t('serviceAreas')}</h3><div class="row wrap-x">${(v.serviceDistricts || [v.district]).map((d) => `<span class="chip">${esc(distName(d))}</span>`).join('')}</div></div>
-      <div class="card"><h3>Availability</h3><p class="small muted" style="margin:0">${(v.blockedDates || []).filter((d) => d >= today()).length ? 'Already booked on: ' + v.blockedDates.filter((d) => d >= today()).sort().map(fmtDate).join(', ') : 'No dates blocked yet — include your date in the enquiry to confirm.'}</p></div>
+      ${venue ? `<div class="card"><h3>Address</h3><p class="small" style="margin:0">${esc(v.address)}</p><a class="small" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.businessName + ' ' + v.address)}">Open in Google Maps →</a></div>` : ''}
+      <div class="card" ${venue ? 'style="display:none"' : ''}><h3>${t('serviceAreas')}</h3><div class="row wrap-x">${(v.serviceDistricts || [v.district]).map((d) => `<span class="chip">${esc(distName(d))}</span>`).join('')}</div></div>
+      ${venue ? '' : `<div class="card"><h3>Availability</h3><p class="small muted" style="margin:0">${(v.blockedDates || []).filter((d) => d >= today()).length ? 'Already booked on: ' + v.blockedDates.filter((d) => d >= today()).sort().map(fmtDate).join(', ') : 'No dates blocked yet — include your date in the enquiry to confirm.'}</p></div>`}
       <div class="card"><h3>${t('policies')}</h3><p style="margin:0" class="small">${esc(v.policies || 'Ask the vendor about booking and cancellation terms.')}</p></div>
       <div class="card"><h3>Customer reviews</h3><p class="small muted" style="margin:0">Verified reviews from completed bookings arrive in Phase 2.</p></div>
       <div style="height:20px"></div>
     </div>`,
+    mount() {
+      if (!venue) return;
+      const draw = () => {
+        $('#calBox').innerHTML = calendarHTML(ym, taken, { selected: pickDate });
+        const tk = taken[pickDate] || [];
+        $('#slotBox').innerHTML = pickDate ? `<div class="stack"><b>${fmtDate(pickDate)}</b><div class="slot-pick">${SLOTS.map((x) => { const ok = slotFree(tk, x.id); return `<button type="button" class="slot-opt ${pickSlot === x.id ? 'on' : ''}" data-slot="${x.id}" ${ok ? '' : 'disabled'}><b>${nameOf(x)}</b><span class="small muted">${x.time}</span><br><span class="price">${ok ? money(v.slotPrices?.[x.id]) : t('booked')}</span></button>`; }).join('')}</div>
+          ${pickSlot ? `<a class="btn block" href="#/enquire/${id}?date=${pickDate}&slot=${pickSlot}">${t('bookSlot')} · ${slotName(pickSlot)}</a>` : '<p class="small muted" style="margin:0">Choose a slot.</p>'}</div>` : '<p class="small muted" style="margin:0">Tap a date to see free slots.</p>';
+      };
+      draw();
+      $('#cal').onclick = (e) => {
+        const c = e.target.closest('[data-cal]'); if (c) { ym = addMonth(ym, Number(c.dataset.cal)); return draw(); }
+        const d = e.target.closest('[data-day]'); if (d) { pickDate = d.dataset.day; pickSlot = ''; return draw(); }
+        const sl = e.target.closest('[data-slot]'); if (sl) { pickSlot = sl.dataset.slot; draw(); }
+      };
+      const tc = $('[data-act=toCal]'); if (tc) tc.onclick = (e) => { e.preventDefault(); $('#cal').scrollIntoView({ behavior: 'smooth' }); };
+    },
   };
 }
 
@@ -252,32 +330,50 @@ async function viewEnquire(vendorId, params) {
   if (!v) return { html: '<div class="wrap empty">Vendor not found.</div>' };
   const events = await db.list('events', ['ownerId', S.user.uid]);
   const pkg = params.get('pkg') || '';
+  const venue = isVenue(v);
+  const taken = venue ? takenMap(await venueSlots(vendorId)) : {};
+  const pDate = params.get('date') || ''; const pSlot = params.get('slot') || 'full';
   return {
     html: `<div class="wrap" style="padding-top:16px"><div class="card stack">
-      <h2>${t('requestQuote')}</h2><p class="muted small" style="margin:0">to <b>${esc(v.businessName)}</b> · ${esc(catName(v.category))}</p>
+      <h2>${venue ? 'Request to book' : t('requestQuote')}</h2><p class="muted small" style="margin:0">to <b>${esc(v.businessName)}</b> · ${esc(catName(v.category))}</p>
       <form id="enq" class="form-grid">
         <div class="full"><label>Event</label><select name="eventId"><option value="">➕ New event</option>${events.map((e) => `<option value="${e.id}">${esc(e.name)} · ${fmtDate(e.date)}</option>`).join('')}</select></div>
         <div><label>Event type</label><select name="eventType">${EVENT_TYPES.map((x) => `<option>${x}</option>`).join('')}</select></div>
         <div><label>Tradition / cultural requirements</label><select name="tradition">${TRADITIONS.map((x) => `<option>${x}</option>`).join('')}</select></div>
-        <div><label>Event date</label><input type="date" name="date" required min="${today()}"></div>
+        <div><label>Event date</label><input type="date" name="date" required min="${today()}" value="${esc(pDate)}"></div>
+        ${venue ? `<div><label>${t('slot')}</label><select name="slot">${SLOTS.map((x) => `<option value="${x.id}" ${x.id === pSlot ? 'selected' : ''}>${nameOf(x)} · ${x.time} · ${money(v.slotPrices?.[x.id])}</option>`).join('')}</select></div>` : ''}
         <div><label>Guests (approx.)</label><input type="number" name="guests" min="1" placeholder="300"></div>
-        <div><label>District</label><select name="district" required>${DISTRICTS.map((d) => `<option value="${d.id}" ${d.id === v.district ? 'selected' : ''}>${nameOf(d)}</option>`).join('')}</select></div>
+        ${venue ? '<div class="full" id="availMsg"></div>' : ''}
+        ${venue ? '' : `<div><label>District</label><select name="district" required>${DISTRICTS.map((d) => `<option value="${d.id}" ${d.id === v.district ? 'selected' : ''}>${nameOf(d)}</option>`).join('')}</select></div>
         <div><label>Venue / location</label><input name="location" required placeholder="Auditorium name, town"></div>
-        <div><label>Package</label><select name="packageId"><option value="">Custom quotation</option>${(v.packages || []).map((k) => `<option value="${k.id}" ${k.id === pkg ? 'selected' : ''}>${esc(k.name)} · ${money(k.price)}${esc(k.unit || '')}</option>`).join('')}</select></div>
+        <div><label>Package</label><select name="packageId"><option value="">Custom quotation</option>${(v.packages || []).map((k) => `<option value="${k.id}" ${k.id === pkg ? 'selected' : ''}>${esc(k.name)} · ${money(k.price)}${esc(k.unit || '')}</option>`).join('')}</select></div>`}
         <div><label>Your budget (₹)</label><input type="number" name="budget" min="0" placeholder="Optional"></div>
-        <div class="full"><label>Requirements</label><textarea name="requirements" required placeholder="Timings, style, number of hours, special requests…"></textarea></div>
+        <div class="full"><label>Requirements</label><textarea name="requirements" required placeholder="${venue ? 'Function timings, dining arrangement, own caterer or in-house, decoration, extra rooms…' : 'Timings, style, number of hours, special requests…'}"></textarea></div>
         <div class="full"><label>Reference images (up to 3)</label><input type="file" id="refImgs" accept="image/*" multiple><div class="thumbs" id="refThumbs" style="margin-top:6px"></div></div>
         <div class="full"><button class="btn block" id="enqBtn">${t('sendEnquiry')}</button></div>
       </form></div></div>`,
     mount() {
       let imgs = [];
       $('#refImgs').onchange = async (e) => { imgs = []; for (const f of [...e.target.files].slice(0, 3)) imgs.push(await compressImage(f, 600, 0.65)); $('#refThumbs').innerHTML = imgs.map((s) => `<img src="${s}">`).join(''); };
+      const checkAvail = () => {
+        if (!venue) return true;
+        const d = $('#enq [name=date]').value; const sl = $('#enq [name=slot]').value; const box = $('#availMsg');
+        if (!d) { box.innerHTML = ''; return true; }
+        const ok = slotFree(taken[d] || [], sl);
+        const g = Number($('#enq [name=guests]').value || 0);
+        box.innerHTML = `<div class="msg" style="background:${ok ? '#e3f1e8' : '#f8e1df'}">${ok ? `✔ ${slotLabel(sl)} on ${fmtDate(d)} is free · hall rent ${money(v.slotPrices?.[sl])}` : `✕ ${slotLabel(sl)} on ${fmtDate(d)} is already booked. Pick another slot or date.`}${g > v.seating ? `<br>⚠ ${g} guests is more than the ${v.seating}-seat capacity.` : ''}</div>`;
+        return ok;
+      };
+      if (venue) { ['date', 'slot', 'guests'].forEach((n) => { $(`#enq [name=${n}]`).addEventListener('input', checkAvail); }); checkAvail(); }
       const evSel = $('#enq [name=eventId]');
-      evSel.onchange = () => { const e = events.find((x) => x.id === evSel.value); if (e) { $('#enq [name=date]').value = e.date || ''; $('#enq [name=eventType]').value = e.type; $('#enq [name=tradition]').value = e.tradition || 'Not specified'; if (e.district) $('#enq [name=district]').value = e.district; if (e.venue) $('#enq [name=location]').value = e.venue; } };
+      evSel.onchange = () => { const e = events.find((x) => x.id === evSel.value); if (e) { $('#enq [name=date]').value = e.date || ''; $('#enq [name=eventType]').value = e.type; $('#enq [name=tradition]').value = e.tradition || 'Not specified'; if (!venue && e.district) $('#enq [name=district]').value = e.district; if (!venue && e.venue) $('#enq [name=location]').value = e.venue; checkAvail(); } };
       $('#enq').onsubmit = async (e) => {
-        e.preventDefault(); $('#enqBtn').disabled = true;
+        e.preventDefault();
+        if (!checkAvail()) return toast('That slot is already booked');
+        $('#enqBtn').disabled = true;
         try {
           const f = formData(e.target);
+          if (venue) { f.district = v.district; f.location = `${v.businessName}, ${v.town}`; f.packageId = f.slot; }
           let eventId = f.eventId;
           if (!eventId) eventId = await db.add('events', { ownerId: S.user.uid, name: `${f.eventType} · ${fmtDate(f.date)}`, type: f.eventType, tradition: f.tradition, date: f.date, district: f.district, venue: f.location, guests: Number(f.guests) || 0, budget: 0 });
           const k = (v.packages || []).find((x) => x.id === f.packageId);
@@ -285,7 +381,7 @@ async function viewEnquire(vendorId, params) {
             customerId: S.user.uid, customerName: S.profile.name || 'Customer', customerPhone: S.profile.phone || '',
             vendorId: v.id, vendorOwnerId: v.ownerId, vendorName: v.businessName, category: v.category,
             eventId, eventType: f.eventType, tradition: f.tradition, date: f.date, district: f.district, location: f.location,
-            guests: Number(f.guests) || 0, packageId: f.packageId || '', packageName: k ? k.name : 'Custom quotation', budget: Number(f.budget) || 0,
+            guests: Number(f.guests) || 0, packageId: f.packageId || '', packageName: venue ? `Hall rent · ${slotLabel(f.slot)}` : (k ? k.name : 'Custom quotation'), slot: venue ? f.slot : '', isVenue: venue, listPrice: venue ? Number(v.slotPrices?.[f.slot] || 0) : (k ? k.price : 0), budget: Number(f.budget) || 0,
             requirements: f.requirements, images: imgs, status: 'enquiry', messages: [],
           });
           toast('Enquiry sent'); go('#/enquiry/' + id);
@@ -327,6 +423,8 @@ async function viewEnquiry(id) {
   qs.sort((a, b) => b.version - a.version);
   const latest = qs[0];
   const open = !['confirmed', 'declined', 'closed'].includes(e.status);
+  const slotRows = e.isVenue ? (await venueSlots(e.vendorId)).filter((r) => r.date === e.date) : [];
+  const slotTakenByOther = e.isVenue && open && !slotFree(slotRows.filter((r) => r.enquiryId !== id).map((r) => r.half), e.slot);
   const customerActions = !isVendor && latest && latest.status === 'sent' && open ? `
     <div class="row wrap-x"><button class="btn green" data-act="accept" data-q="${latest.id}">${t('accept')}</button>
     <button class="btn ghost" data-act="showRevise">${t('requestRevision')}</button>
@@ -340,10 +438,11 @@ async function viewEnquiry(id) {
       <div class="card stack">
         <div class="row between wrap-x"><h2 style="margin:0">${esc(isVendor ? e.customerName : e.vendorName)}</h2>${statusBadge(e.status)}</div>
         ${timeline(e.status)}
-        <table class="cmp"><tr><td>Event</td><td>${esc(e.eventType)} · ${esc(e.tradition)}</td></tr><tr><td>Date</td><td>${fmtDate(e.date)}</td></tr>
+        <table class="cmp"><tr><td>Event</td><td>${esc(e.eventType)} · ${esc(e.tradition)}</td></tr><tr><td>Date</td><td>${fmtDate(e.date)}${e.slot ? ' · ' + esc(slotLabel(e.slot)) : ''}</td></tr>
         <tr><td>Location</td><td>${esc(e.location)}, ${esc(distName(e.district))}</td></tr><tr><td>Guests</td><td>${e.guests || '—'}</td></tr>
         <tr><td>Package</td><td>${esc(e.packageName)}</td></tr><tr><td>Budget</td><td>${e.budget ? money(e.budget) : '—'}</td></tr>
         ${isVendor || isAdmin ? `<tr><td>Customer phone</td><td>${esc(e.customerPhone || '—')}</td></tr>` : ''}</table>
+        ${slotTakenByOther ? `<div class="msg" style="background:#f8e1df">✕ This slot has since been booked or blocked. ${isVendor ? 'Decline, or suggest another date in your message.' : 'Ask the venue for another date or slot.'}</div>` : ''}
         <div class="msg"><b>Requirements:</b> ${esc(e.requirements)}</div>
         ${e.images?.length ? `<div class="thumbs">${e.images.map((s) => `<img src="${s}">`).join('')}</div>` : ''}
       </div>
@@ -351,10 +450,10 @@ async function viewEnquiry(id) {
       ${vendorCanQuote ? `<div class="card stack"><h3>${latest ? 'Send revised quotation' : 'Send quotation'}</h3>
         <form id="qform" class="form-grid">
           <div><label>Package name</label><input name="packageName" required value="${esc(latest?.packageName || e.packageName)}"></div>
-          <div><label>Package price (₹)</label><input type="number" name="total" required min="0" value="${latest ? (latest.targetPrice || latest.total) : ''}"></div>
+          <div><label>Package price (₹)</label><input type="number" name="total" required min="0" value="${latest ? (latest.targetPrice || latest.total) : (e.listPrice || '')}"></div>
           <div><label>Additional charges (₹)</label><input type="number" name="additional" min="0" value="${latest?.additional || 0}"></div>
           <div><label>Additional charges note</label><input name="additionalNote" value="${esc(latest?.additionalNote || '')}" placeholder="Travel, GST…"></div>
-          <div><label>Advance payment (₹)</label><input type="number" name="advance" required min="0" value="${latest?.advance || ''}"></div>
+          <div><label>Advance payment (₹)</label><input type="number" name="advance" required min="0" value="${latest?.advance || (e.listPrice ? Math.round(e.listPrice * 0.25) : '')}"></div>
           <div><label>Valid until</label><input type="date" name="validUntil" required min="${today()}" value="${latest?.validUntil && latest.validUntil >= today() ? latest.validUntil : ''}"></div>
           <div class="full"><label>Service details</label><textarea name="details" required>${esc(latest?.details || '')}</textarea></div>
           <div><label>Inclusions (one per line)</label><textarea name="inclusions">${esc((latest?.inclusions || []).join('\n'))}</textarea></div>
@@ -393,6 +492,10 @@ async function viewEnquiry(id) {
         if (b.dataset.act === 'showRevise') rv.style.display = 'block';
         if (b.dataset.act === 'accept') {
           if (latest.validUntil && latest.validUntil < today()) return toast('This quotation has expired. Request a revision instead.');
+          if (e.isVenue) {
+            try { await db.createMany('slots', halvesOf(e.slot).map((h) => [`${e.vendorId}_${e.date}_${h}`, { venueId: e.vendorId, date: e.date, half: h, enquiryId: id, customerId: e.customerId, source: 'booking' }])); }
+            catch (err) { return toast(err.message === 'ALREADY_TAKEN' ? 'Sorry — this slot was just booked by someone else.' : err.message); }
+          }
           await db.update('quotations', latest.id, { status: 'accepted' });
           await db.update('enquiries', id, { status: 'confirmed', acceptedQuoteId: latest.id, finalAmount: Number(latest.total) + Number(latest.additional || 0), advanceDue: Number(latest.advance), confirmedAt: Date.now() });
           toast('Booking confirmed 🎉'); render();
@@ -409,7 +512,7 @@ async function viewBookings() {
   const es = (await db.list('enquiries', ['customerId', S.user.uid])).sort((a, b) => b.createdAt - a.createdAt);
   const confirmed = es.filter((e) => e.status === 'confirmed');
   const active = es.filter((e) => ['enquiry', 'quoted', 'negotiation'].includes(e.status));
-  const row = (e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.vendorName)}</b><div class="small muted">${esc(catName(e.category))} · ${fmtDate(e.date)}${e.finalAmount ? ' · ' + money(e.finalAmount) : e.lastQuoteTotal ? ' · quote ' + money(e.lastQuoteTotal) : ''}</div></div>${statusBadge(e.status)}</a>`;
+  const row = (e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.vendorName)}</b><div class="small muted">${esc(catName(e.category))} · ${fmtDate(e.date)}${e.slot ? ' · ' + esc(slotName(e.slot)) : ''}${e.finalAmount ? ' · ' + money(e.finalAmount) : e.lastQuoteTotal ? ' · quote ' + money(e.lastQuoteTotal) : ''}</div></div>${statusBadge(e.status)}</a>`;
   return {
     html: `<div class="wrap stack" style="padding-top:16px"><h1>${t('bookings')}</h1>
       <div class="card"><h3>Confirmed bookings</h3>${confirmed.map(row).join('') || '<p class="muted small">No confirmed bookings yet.</p>'}
@@ -450,7 +553,7 @@ async function viewEvents() {
           <div class="stat"><b>${money(committed)}</b><span>Committed${ev.budget ? ' of ' + money(ev.budget) : ''}</span></div></div>
           <div class="row wrap-x"><a class="btn sm" href="#/compare/${ev.id}">${t('compare')}</a><a class="btn sm ghost" href="#/explore">Add vendors</a></div></div>`;
       }).join('') || '<div class="card muted">No events yet. Create one, or send an enquiry and we’ll create it for you.</div>'}
-      ${favs.length ? `<h2>Saved vendors</h2><div class="grid">${favs.map(vendorCard).join('')}</div>` : ''}
+      ${favs.length ? `<h2>Saved vendors</h2><div class="grid">${favs.map((v) => vendorCard(v)).join('')}</div>` : ''}
       <p class="small muted">Full budget tracking, checklist and family sharing arrive in Phase 3.</p>
     </div>`,
     mount() {
@@ -554,7 +657,7 @@ async function viewVendorRegister() {
   if (S.vendor) { go('#/vendor'); return { html: '' }; }
   const p = S.profile;
   return {
-    html: `<div class="wrap" style="padding-top:16px"><div class="card stack"><h2>Register your business</h2><p class="muted small" style="margin:0">Your listing goes live after our team verifies it. Verified vendors get a badge.</p>
+    html: `<div class="wrap" style="padding-top:16px"><div class="card stack"><h2>List your venue or service</h2><p class="muted small" style="margin:0">Your listing goes live after our team verifies it. Verified listings get a badge. Hall owners add capacity and slot prices on the next screen.</p>
       <form id="vr" class="form-grid">
         <div><label>Business name</label><input name="businessName" required></div>
         <div><label>Owner name</label><input name="ownerName" required value="${esc(p.name)}"></div>
@@ -612,10 +715,10 @@ async function viewVendorDash() {
   return {
     html: `<div class="wrap stack" style="padding-top:16px">
       <div><h1 style="margin:0">${esc(v.businessName)}</h1><div class="row wrap-x small">${v.status === 'approved' ? '<span class="badge ok">Live</span>' : `<span class="badge warn">${v.status === 'pending' ? 'Awaiting admin verification' : esc(v.status)}</span>`}${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}</div></div>
-      ${!v.packages?.length ? '<div class="card" style="background:#fbeed6">Add at least one package so customers can see your prices. <a href="#/vendor/services">Add packages →</a></div>' : ''}
+      ${isVenue(v) ? (!v.slotPrices?.full ? '<div class="card" style="background:#fbeed6">Add your capacity and slot prices so customers can find and book your hall. <a href="#/vendor/services">Add venue details →</a></div>' : '') : (!v.packages?.length ? '<div class="card" style="background:#fbeed6">Add at least one package so customers can see your prices. <a href="#/vendor/services">Add packages →</a></div>' : '')}
       <div class="stat-grid">${stat(es.length, 'Total enquiries')}${stat(es.filter((e) => e.status === 'enquiry').length, 'New enquiries')}${stat(es.filter((e) => e.status === 'negotiation').length, 'Revision requests')}${stat(es.filter((e) => e.status === 'quoted').length, 'Quotes awaiting reply')}${stat(conf.length, 'Confirmed bookings')}${stat(money(rev), 'Booked this month')}${stat(v.views || 0, 'Profile views')}${stat('★ ' + Number(v.rating || 0).toFixed(1), (v.reviewCount || 0) + ' reviews')}</div>
-      <div class="card"><h3>Needs your action</h3>${es.filter((e) => ['enquiry', 'negotiation'].includes(e.status)).slice(0, 6).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.customerName)}</b><div class="small muted">${esc(e.eventType)} · ${fmtDate(e.date)} · ${esc(distName(e.district))}</div></div>${statusBadge(e.status)}</a>`).join('') || '<p class="muted small">All caught up.</p>'}</div>
-      <div class="card"><h3>Upcoming events</h3>${upcoming.slice(0, 5).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${fmtDate(e.date)}</b> · ${esc(e.customerName)}<div class="small muted">${esc(e.location)}</div></div><span class="price">${money(e.finalAmount)}</span></a>`).join('') || '<p class="muted small">No upcoming bookings.</p>'}</div>
+      <div class="card"><h3>Needs your action</h3>${es.filter((e) => ['enquiry', 'negotiation'].includes(e.status)).slice(0, 6).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.customerName)}</b><div class="small muted">${esc(e.eventType)} · ${fmtDate(e.date)}${e.slot ? ' · ' + esc(slotName(e.slot)) : ''} · ${e.guests || '—'} guests</div></div>${statusBadge(e.status)}</a>`).join('') || '<p class="muted small">All caught up.</p>'}</div>
+      <div class="card"><h3>Upcoming events</h3>${upcoming.slice(0, 5).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${fmtDate(e.date)}</b>${e.slot ? ' · ' + esc(slotName(e.slot)) : ''} · ${esc(e.customerName)}<div class="small muted">${esc(e.eventType)} · ${e.guests || '—'} guests</div></div><span class="price">${money(e.finalAmount)}</span></a>`).join('') || '<p class="muted small">No upcoming bookings.</p>'}</div>
     </div>`,
   };
 }
@@ -626,30 +729,80 @@ async function viewVendorEnquiries(onlyConfirmed) {
   const es = onlyConfirmed ? all.filter((e) => e.status === 'confirmed') : all;
   return {
     html: `<div class="wrap stack" style="padding-top:16px"><h1>${onlyConfirmed ? t('bookings') : t('enquiries')}</h1>
-      <div class="card">${es.map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.customerName)}</b><div class="small muted">${esc(e.eventType)} · ${esc(e.tradition)} · ${fmtDate(e.date)} · ${esc(e.packageName)}${e.finalAmount ? ' · ' + money(e.finalAmount) + ' (advance ' + money(e.advanceDue) + ')' : ''}</div></div>${statusBadge(e.status)}</a>`).join('') || '<p class="muted">Nothing here yet.</p>'}</div>
+      <div class="card">${es.map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.customerName)}</b><div class="small muted">${esc(e.eventType)} · ${esc(e.tradition)} · ${fmtDate(e.date)} · ${esc(e.packageName)}${e.guests ? ' · ' + e.guests + ' guests' : ''}${e.finalAmount ? ' · ' + money(e.finalAmount) + ' (advance ' + money(e.advanceDue) + ')' : ''}</div></div>${statusBadge(e.status)}</a>`).join('') || '<p class="muted">Nothing here yet.</p>'}</div>
       ${onlyConfirmed ? '<p class="small muted">Advance payment tracking through Razorpay arrives in Phase 2.</p>' : ''}</div>`,
+  };
+}
+
+async function viewVendorCalendar() {
+  if (role() !== 'vendor') return { html: needLogin() };
+  const v = S.vendor;
+  if (!isVenue(v)) return viewVendorEnquiries(true);
+  let rows = await venueSlots(S.user.uid);
+  const es = (await vendorData()).filter((e) => e.status === 'confirmed');
+  let ym = today().slice(0, 7); let pick = today();
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px"><h1>${t('calendar')}</h1>
+      <p class="small muted" style="margin:0">Confirmed HallHub bookings fill in automatically. Block slots you booked offline (phone, walk-in) so customers can't request them.</p>
+      <div class="card" id="vcal"></div><div class="card stack" id="dayBox"></div>
+      <div class="card"><h3>Upcoming bookings</h3>${es.filter((e) => e.date >= today()).sort((a, b) => a.date.localeCompare(b.date)).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${fmtDate(e.date)}</b> · ${esc(slotName(e.slot))}<div class="small muted">${esc(e.customerName)} · ${esc(e.eventType)} · ${e.guests || '—'} guests</div></div><span class="price">${money(e.finalAmount)}</span></a>`).join('') || '<p class="muted small">No upcoming bookings yet.</p>'}</div>
+    </div>`,
+    mount() {
+      const draw = () => {
+        $('#vcal').innerHTML = calendarHTML(ym, takenMap(rows), { selected: pick });
+        const day = rows.filter((r) => r.date === pick);
+        $('#dayBox').innerHTML = `<h3 style="margin:0">${fmtDate(pick)}</h3>${['morning', 'evening'].map((h) => {
+          const r = day.find((x) => x.half === h); const b = r && r.enquiryId ? es.find((e) => e.id === r.enquiryId) : null;
+          return `<div class="list-item"><div><b>${slotLabel(h)}</b><div class="small muted">${!r ? t('available') : b ? `Booked · ${esc(b.customerName)} · ${money(b.finalAmount)}` : r.enquiryId ? 'Booked via HallHub' : 'Blocked — ' + esc(r.note || 'offline booking')}</div></div>
+            ${!r ? `<button class="btn sm ghost" data-block="${h}">Block</button>` : r.source === 'manual' ? `<button class="btn sm ghost" data-unblock="${r.id}">Unblock</button>` : b ? `<a class="btn sm ghost" href="#/enquiry/${b.id}">View</a>` : ''}</div>`;
+        }).join('')}`;
+      };
+      draw();
+      $('#view').onclick = async (e) => {
+        const c = e.target.closest('[data-cal]'); if (c) { ym = addMonth(ym, Number(c.dataset.cal)); return draw(); }
+        const d = e.target.closest('[data-day]'); if (d) { pick = d.dataset.day; return draw(); }
+        const bl = e.target.closest('[data-block]');
+        if (bl) {
+          const note = prompt('Note for this block (e.g. customer name)', 'Offline booking') ?? 'Offline booking';
+          try { await db.createMany('slots', [[`${S.user.uid}_${pick}_${bl.dataset.block}`, { venueId: S.user.uid, date: pick, half: bl.dataset.block, source: 'manual', note }]]); } catch (err) { toast(err.message === 'ALREADY_TAKEN' ? 'Already booked' : err.message); }
+          rows = await venueSlots(S.user.uid); return draw();
+        }
+        const ub = e.target.closest('[data-unblock]');
+        if (ub) { await db.remove('slots', ub.dataset.unblock); rows = await venueSlots(S.user.uid); draw(); }
+      };
+    },
   };
 }
 
 async function viewVendorServices() {
   if (role() !== 'vendor') return { html: needLogin() };
-  const v = S.vendor;
+  const v = S.vendor; const venue = isVenue(v);
   const pkgRow = (k = { id: 'p' + Date.now(), name: '', price: '', unit: '', inclusions: [] }) => `<div class="pkg form-grid" data-pkg="${k.id}">
     <div><label>Package name</label><input data-f="name" value="${esc(k.name)}" required></div><div><label>Price (₹)</label><input type="number" data-f="price" value="${esc(k.price)}" required min="0"></div>
     <div><label>Unit (optional)</label><input data-f="unit" value="${esc(k.unit)}" placeholder=" per plate"></div>
     <div class="full"><label>Inclusions (one per line)</label><textarea data-f="inclusions">${esc((k.inclusions || []).join('\n'))}</textarea></div>
     <div class="full"><button type="button" class="btn sm ghost" data-act="rmPkg">Remove package</button></div></div>`;
   return {
-    html: `<div class="wrap stack" style="padding-top:16px"><h1>${t('services')}</h1>
+    html: `<div class="wrap stack" style="padding-top:16px"><h1>${venue ? t('venue') : t('services')}</h1>
       <form id="svc" class="stack">
-        <div class="card stack"><div class="row between"><h3 style="margin:0">${t('packages')}</h3><button type="button" class="btn sm" data-act="addPkg">+ Add package</button></div><div id="pkgs" class="stack">${(v.packages || []).map(pkgRow).join('')}</div></div>
+        ${venue ? `<div class="card form-grid"><h3 class="full" style="margin:0">Capacity & hall rent</h3>
+          <div><label>Hall type</label><select name="category">${CATEGORIES.filter((c) => c.group === 'venues').map((c) => `<option value="${c.id}" ${c.id === v.category ? 'selected' : ''}>${esc(c.en)}</option>`).join('')}</select></div>
+          <div><label>Seating capacity</label><input type="number" name="seating" min="1" required value="${v.seating || ''}"></div>
+          <div><label>Dining capacity (per sitting)</label><input type="number" name="dining" min="0" value="${v.dining || ''}"></div>
+          <div><label>Car parking</label><input type="number" name="parking" min="0" value="${v.parking || ''}"></div>
+          <div><label>Bridal / green rooms</label><input type="number" name="rooms" min="0" value="${v.rooms || ''}"></div>
+          <div><label>Air-conditioning</label><select name="ac">${AC_TYPES.map((x) => `<option ${x === v.ac ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+          <div><label>Catering</label><select name="catering">${CATERING_RULES.map((x) => `<option ${x === v.catering ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+          ${SLOTS.map((x) => `<div><label>${x.en} rent (₹) · ${x.time}</label><input type="number" name="price_${x.id}" min="0" required value="${v.slotPrices?.[x.id] || ''}"></div>`).join('')}
+          <div class="full"><label>Facilities</label><div class="row wrap-x">${AMENITIES.map((a) => `<label class="chip" style="margin:0"><input type="checkbox" name="amen" value="${a}" ${(v.amenities || []).includes(a) ? 'checked' : ''} style="width:auto"> ${a}</label>`).join('')}</div></div>
+        </div>` : `<div class="card stack"><div class="row between"><h3 style="margin:0">${t('packages')}</h3><button type="button" class="btn sm" data-act="addPkg">+ Add package</button></div><div id="pkgs" class="stack">${(v.packages || []).map(pkgRow).join('')}</div></div>`}
         <div class="card form-grid">
           <div class="full"><label>About your business</label><textarea name="description">${esc(v.description)}</textarea></div>
           <div class="full"><label>Booking & cancellation policy</label><textarea name="policies">${esc(v.policies)}</textarea></div>
           <div><label>Promotional offer</label><input name="offer" value="${esc(v.offer || '')}" placeholder="10% off weekday bookings"></div>
           <div><label>Video links (comma separated)</label><input name="videos" value="${esc((v.videos || []).join(', '))}" placeholder="YouTube / Instagram links"></div>
           <div class="full"><label>Ceremonies you are experienced with</label><div class="row wrap-x">${TRADITIONS.slice(0, 6).map((x) => `<label class="chip" style="margin:0"><input type="checkbox" name="trad" value="${x}" ${(v.traditions || []).includes(x) ? 'checked' : ''} style="width:auto"> ${x}</label>`).join('')}</div></div>
-          <div class="full"><label>Dates already booked (blocked from search) — one per line, YYYY-MM-DD</label><textarea name="blocked">${esc((v.blockedDates || []).join('\n'))}</textarea></div>
+          ${venue ? '<p class="full small muted" style="margin:0">Manage booked and blocked dates in the Calendar tab.</p>' : `<div class="full"><label>Dates already booked (blocked from search) — one per line, YYYY-MM-DD</label><textarea name="blocked">${esc((v.blockedDates || []).join('\n'))}</textarea></div>`}
         </div>
         <div class="card stack"><h3 style="margin:0">Portfolio (up to 6 images)</h3><div class="gallery" id="gal">${(v.portfolio || []).map((s, i) => `<div style="position:relative"><img src="${s}"><button type="button" class="badge bad" style="position:absolute;top:4px;right:4px;border:0;cursor:pointer" data-act="rmImg" data-i="${i}">✕</button></div>`).join('')}</div><input type="file" id="addImgs" accept="image/*" multiple></div>
         <button class="btn block">${t('save')}</button>
@@ -670,8 +823,10 @@ async function viewVendorServices() {
         const packages = $$('[data-pkg]').map((el) => ({ id: el.dataset.pkg, name: $('[data-f=name]', el).value.trim(), price: Number($('[data-f=price]', el).value), unit: $('[data-f=unit]', el).value, inclusions: $('[data-f=inclusions]', el).value.split('\n').map((x) => x.trim()).filter(Boolean) })).filter((k) => k.name);
         const prices = packages.map((k) => k.price).filter((n) => n > 0);
         const cheapest = packages.find((k) => k.price === Math.min(...prices));
-        const blocked = fd.get('blocked').split('\n').map((x) => x.trim()).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x));
-        const patch = { packages, startingPrice: prices.length ? Math.min(...prices) : 0, priceUnit: cheapest?.unit || '', description: fd.get('description'), policies: fd.get('policies'), offer: fd.get('offer'), videos: fd.get('videos').split(',').map((x) => x.trim()).filter(Boolean), traditions: fd.getAll('trad'), blockedDates: blocked, portfolio };
+        const blocked = venue ? [] : fd.get('blocked').split('\n').map((x) => x.trim()).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x));
+        const slotPrices = venue ? Object.fromEntries(SLOTS.map((x) => [x.id, Number(fd.get('price_' + x.id)) || 0])) : null;
+        const venuePatch = venue ? { category: fd.get('category'), seating: Number(fd.get('seating')), dining: Number(fd.get('dining')) || 0, parking: Number(fd.get('parking')) || 0, rooms: Number(fd.get('rooms')) || 0, ac: fd.get('ac'), catering: fd.get('catering'), amenities: fd.getAll('amen'), slotPrices, startingPrice: Math.min(...[slotPrices.morning, slotPrices.evening, slotPrices.full].filter((n) => n > 0).concat([]).slice(0, 3), ...([slotPrices.morning, slotPrices.evening, slotPrices.full].some((n) => n > 0) ? [] : [0])), priceUnit: ' per slot' } : {};
+        const patch = { packages, startingPrice: prices.length ? Math.min(...prices) : 0, priceUnit: cheapest?.unit || '', ...venuePatch, description: fd.get('description'), policies: fd.get('policies'), offer: fd.get('offer'), videos: fd.get('videos').split(',').map((x) => x.trim()).filter(Boolean), traditions: fd.getAll('trad'), blockedDates: blocked, portfolio };
         try { await db.update('vendors', S.user.uid, patch); Object.assign(S.vendor, patch); vendorCache = null; toast('Saved'); } catch (err) { toast(err.message.includes('size') ? 'Images too large — remove one and try again' : err.message); }
       };
     },
@@ -699,7 +854,7 @@ async function viewAdmin(tab) {
     body = `<div class="stat-grid">${stat(us.filter((u) => u.role === 'customer').length, 'Customers')}${stat(vs.filter((v) => v.status === 'approved').length, 'Live vendors')}${stat(pending.length, 'Awaiting verification')}${stat(es.length, 'Enquiries')}${stat(conf.length, 'Confirmed bookings')}${stat(money(conf.reduce((s, e) => s + (e.finalAmount || 0), 0)), 'Booking value')}</div>
       <div class="card"><h3>Verification queue</h3>${pending.map(vRow).join('') || '<p class="muted small">No vendors waiting.</p>'}</div>
       <div class="card stack"><h3 style="margin:0">Demo data</h3><p class="small muted" style="margin:0">${vs.filter((v) => v.isDemo).length} demo vendors loaded. Demo vendors are labelled “Demo” everywhere in the app.</p>
-        <div class="row wrap-x"><button class="btn sm" data-act="seed">Load demo vendors</button><button class="btn sm ghost" data-act="unseed">Hide demo vendors</button></div></div>
+        <div class="row wrap-x"><button class="btn sm" data-act="seed">Load demo venues</button><button class="btn sm ghost" data-act="unseed">Hide demo venues</button></div></div>
       <div class="card"><h3>Possible duplicates</h3>${dupes(vs) || '<p class="muted small">No vendors share a phone number.</p>'}</div>
       <p class="small muted">Commission, subscriptions, coupons, banners and payment tracking arrive in Phases 2–3.</p>`;
   } else if (tab === 'vendors') {
@@ -721,7 +876,7 @@ async function viewAdmin(tab) {
         if (a === 'suspend' && confirm('Suspend this vendor? Their listing will be hidden.')) await db.update('vendors', id, { status: 'suspended' });
         if (a === 'restore') await db.update('vendors', id, { status: 'approved' });
         if (a === 'toggle') await db.update('vendors', id, { [b.dataset.f]: !v[b.dataset.f] });
-        if (a === 'seed') { b.disabled = true; for (const s of buildSeedVendors()) { const { id: sid, ...rest } = s; await db.set('vendors', sid, rest); } toast('Demo vendors loaded'); }
+        if (a === 'seed') { b.disabled = true; for (const s of buildSeedVendors()) { const { id: sid, ...rest } = s; await db.set('vendors', sid, rest); } for (const k of buildSeedBookings()) { const { id: kid, ...rest } = k; await db.set('slots', kid, rest).catch(() => {}); } toast('Demo venues loaded'); }
         if (a === 'unseed') { for (const s of vs.filter((x) => x.isDemo)) await db.update('vendors', s.id, { status: 'archived' }); toast('Demo vendors hidden'); }
         vendorCache = null; render();
       };
@@ -762,6 +917,7 @@ async function route() {
       if (parts[1] === 'enquiries') return viewVendorEnquiries(false);
       if (parts[1] === 'bookings') return viewVendorEnquiries(true);
       if (parts[1] === 'services') return viewVendorServices();
+      if (parts[1] === 'calendar') return viewVendorCalendar();
       return viewVendorDash();
     case 'admin': return viewAdmin(parts[1]);
     default: return { html: '<div class="wrap empty">Page not found.</div>' };

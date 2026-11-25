@@ -18,97 +18,116 @@ export const DISTRICTS = [
 ];
 
 export const CATEGORY_GROUPS = [
-  { id: 'wedding', en: 'Wedding Vendors', ml: 'വിവാഹ സേവനങ്ങൾ' },
+  { id: 'venues', en: 'Halls & Venues', ml: 'ഹാളുകളും വേദികളും' },
+  { id: 'wedding', en: 'Wedding Services', ml: 'വിവാഹ സേവനങ്ങൾ' },
   { id: 'kerala', en: 'Kerala Traditions', ml: 'കേരള പാരമ്പര്യം' },
-  { id: 'event', en: 'Event Vendors', ml: 'ഇവന്റ് സേവനങ്ങൾ' },
+  { id: 'event', en: 'Event Services', ml: 'ഇവന്റ് സേവനങ്ങൾ' },
   { id: 'extra', en: 'Additional Services', ml: 'മറ്റ് സേവനങ്ങൾ' },
 ];
 
 const c = (id, en, group, icon) => ({ id, en, group, icon });
 export const CATEGORIES = [
+  c('auditorium', 'Auditoriums', 'venues', '🏛️'),
+  c('convention', 'Convention Centres', 'venues', '🏟️'),
+  c('community-hall', 'Community & Parish Halls', 'venues', '🏠'),
+  c('resort', 'Resort & Lawn Venues', 'venues', '🏝️'),
+  c('backwater', 'Backwater Venues', 'venues', '🌴'),
+  c('houseboat', 'Houseboat Venues', 'venues', '🛶'),
   c('photography', 'Wedding Photographers', 'wedding', '📷'),
   c('cinematography', 'Cinematographers', 'wedding', '🎬'),
-  c('prewedding', 'Pre-wedding Photography', 'wedding', '🌅'),
   c('planner', 'Wedding Planners', 'wedding', '📋'),
   c('decor', 'Wedding Decorators', 'wedding', '🌸'),
   c('mandapam', 'Stage & Mandapam Decor', 'wedding', '🛕'),
   c('bridal-makeup', 'Bridal Makeup Artists', 'wedding', '💄'),
-  c('groom-styling', 'Groom Makeup & Styling', 'wedding', '🤵'),
   c('boutique', 'Bridal Wear & Boutiques', 'wedding', '👗'),
   c('invitations', 'Invitation Designers', 'wedding', '💌'),
-  c('jewellery', 'Wedding Jewellery', 'wedding', '💍'),
   c('dj', 'Entertainment & DJs', 'wedding', '🎧'),
   c('catering', 'Wedding Catering', 'wedding', '🍽️'),
-  c('venue', 'Venues & Auditoriums', 'wedding', '🏛️'),
-  c('resort', 'Resorts & Destination Venues', 'wedding', '🏝️'),
   c('mehendi', 'Mehendi Artists', 'wedding', '🌿'),
-  c('bridal-transport', 'Bridal Transportation', 'wedding', '🚘'),
   c('cake', 'Wedding Cakes', 'wedding', '🎂'),
   c('chenda', 'Chenda Melam', 'kerala', '🥁'),
   c('panchavadyam', 'Panchavadyam', 'kerala', '🎺'),
   c('sadya', 'Traditional Kerala Sadya', 'kerala', '🍛'),
-  c('elephant', 'Wedding Elephants (where legally permitted)', 'kerala', '🐘'),
   c('trad-decor', 'Traditional Kerala Decor', 'kerala', '🪔'),
-  c('houseboat', 'Houseboat Wedding Venues', 'kerala', '🛶'),
-  c('backwater', 'Backwater Wedding Venues', 'kerala', '🌴'),
-  c('birthday', 'Birthday Party Planners', 'event', '🎈'),
-  c('balloon', 'Balloon Decorators', 'event', '🎈'),
   c('event-mgmt', 'Event Management', 'event', '🎪'),
-  c('corporate', 'Corporate Event Planners', 'event', '🏢'),
   c('sound-light', 'Sound & Lighting', 'event', '💡'),
-  c('band', 'Live Bands & Musicians', 'event', '🎸'),
   c('anchor', 'Anchors & Emcees', 'event', '🎤'),
-  c('magician', 'Magicians & Entertainers', 'event', '🎩'),
   c('rentals', 'Furniture & Equipment Rentals', 'event', '🪑'),
-  c('tent', 'Tent & Stage Rentals', 'event', '⛺'),
   c('flowers', 'Flower Decorators', 'event', '💐'),
-  c('event-catering', 'Event Catering', 'event', '🥘'),
-  c('photobooth', 'Photobooths', 'event', '📸'),
   c('car-rental', 'Wedding Car Rentals', 'extra', '🚗'),
   c('guest-transport', 'Guest Transportation', 'extra', '🚌'),
   c('accommodation', 'Accommodation', 'extra', '🏨'),
   c('return-gifts', 'Return Gifts', 'extra', '🎁'),
-  c('printing', 'Invitation Printing', 'extra', '🖨️'),
-  c('digital-invite', 'Digital Invitations', 'extra', '📱'),
 ];
+export const VENUE_CATS = CATEGORIES.filter((x) => x.group === 'venues').map((x) => x.id);
+export const isVenue = (v) => VENUE_CATS.includes(v?.category);
 
-export const EVENT_TYPES = ['Wedding', 'Engagement', 'Reception', 'Birthday', 'Housewarming', 'Corporate Event', 'Other'];
+// Booking slots. A full-day booking takes both halves, so it is stored as two half-day slots.
+export const SLOTS = [
+  { id: 'morning', en: 'Morning', ml: 'രാവിലെ', time: '7 am – 3 pm' },
+  { id: 'evening', en: 'Evening', ml: 'വൈകുന്നേരം', time: '4 pm – 11 pm' },
+  { id: 'full', en: 'Full day', ml: 'മുഴുവൻ ദിവസം', time: '7 am – 11 pm' },
+];
+export const slotById = (id) => SLOTS.find((s) => s.id === id);
+export const halvesOf = (slot) => (slot === 'full' ? ['morning', 'evening'] : [slot]);
+export function slotFree(taken, slot) { return halvesOf(slot).every((h) => !taken.includes(h)); }
+
+export const AC_TYPES = ['Fully air-conditioned', 'AC hall, non-AC dining', 'Non-AC'];
+export const CATERING_RULES = ['Outside caterers allowed', 'In-house catering only', 'In-house or outside'];
+export const AMENITIES = ['Stage', 'Bridal room', 'Groom room', 'Dining hall', 'Sadya kitchen', 'Generator backup', 'Lift', 'Wheelchair access', 'Sound system', 'Projector & screen', 'Prayer room', 'Valet parking', 'Guest rooms', 'Lawn / open area', 'CCTV & security'];
+
+export const EVENT_TYPES = ['Wedding', 'Engagement', 'Reception', 'Birthday', 'Housewarming', 'Corporate Event', 'Conference', 'Other'];
 export const TRADITIONS = ['Hindu', 'Muslim', 'Christian', 'Traditional Kerala', 'Destination', 'Interfaith', 'Not specified'];
 
 export const catById = (id) => CATEGORIES.find((x) => x.id === id);
 export const districtById = (id) => DISTRICTS.find((x) => x.id === id);
 
-// ---------------- Demo seed data (clearly marked) ----------------
-// [name, category, district, town, startPrice, rating, reviews, featured]
-const SEED = [
-  ['Kayal Frames Studio', 'photography', 'alp', 'Alappuzha', 45000, 4.8, 126, true],
-  ['Mizhi Wedding Stories', 'cinematography', 'ekm', 'Kochi', 85000, 4.9, 98, true],
-  ['Ponnonam Photography', 'photography', 'tsr', 'Thrissur', 35000, 4.6, 74, false],
-  ['Malabar Lens Co.', 'photography', 'kkd', 'Kozhikode', 40000, 4.7, 88, false],
-  ['Thalam Chenda Sangham', 'chenda', 'tsr', 'Thrissur', 18000, 4.9, 61, true],
-  ['Panchari Panchavadyam Troupe', 'panchavadyam', 'pkd', 'Ottapalam', 25000, 4.8, 39, false],
-  ['Annapoorna Sadya Caterers', 'sadya', 'ktm', 'Kottayam', 350, 4.7, 210, true],
-  ['Malabar Biriyani House Catering', 'catering', 'mlp', 'Manjeri', 450, 4.8, 167, true],
-  ['Vembanad Houseboat Weddings', 'houseboat', 'alp', 'Kuttanad', 150000, 4.9, 42, true],
-  ['Kumarakom Lakeside Resort', 'backwater', 'ktm', 'Kumarakom', 300000, 4.8, 55, false],
-  ['Grand Pearl Convention Centre', 'venue', 'ekm', 'Kakkanad', 120000, 4.5, 133, false],
-  ['Hilltop Mist Resort', 'resort', 'idk', 'Munnar', 250000, 4.7, 47, true],
-  ['Swarna Bridal Studio', 'bridal-makeup', 'tvm', 'Thiruvananthapuram City', 25000, 4.8, 152, true],
-  ['Mylanchi Mehendi Arts', 'mehendi', 'mlp', 'Kottakkal', 6000, 4.9, 93, false],
-  ['Nilavilakku Decor & Events', 'trad-decor', 'klm', 'Kollam City', 60000, 4.6, 58, false],
-  ['Kalyanamandapam Stage Works', 'mandapam', 'tsr', 'Guruvayur', 45000, 4.7, 81, false],
-  ['Rose Garden Flower Decor', 'flowers', 'kkd', 'Kozhikode', 30000, 4.5, 64, false],
-  ['Beat Factory DJs', 'dj', 'ekm', 'Kochi', 35000, 4.4, 70, false],
-  ['Wayanad Woods Events', 'event-mgmt', 'wyd', 'Kalpetta', 80000, 4.6, 29, false],
-  ['Balloon Bliss Kannur', 'balloon', 'knr', 'Kannur', 8000, 4.7, 112, false],
-  ['Chakka Cakes', 'cake', 'pta', 'Thiruvalla', 4500, 4.8, 76, false],
-  ['Royal Ride Wedding Cars', 'car-rental', 'kkd', 'Kozhikode', 12000, 4.5, 45, false],
-  ['Bekal Fort View Venue', 'venue', 'ksd', 'Bekal', 90000, 4.6, 33, false],
-  ['Thoovanam Invitations', 'invitations', 'ktm', 'Changanassery', 60, 4.7, 88, false],
-  ['Kasavu Couture', 'boutique', 'tsr', 'Thrissur', 18000, 4.8, 104, false],
-  ['Sutradhar Emcee Services', 'anchor', 'ekm', 'Aluva', 15000, 4.6, 51, false],
-  ['Ganesh Guruvayur Elephant Hire (Licensed)', 'elephant', 'tsr', 'Guruvayur', 40000, 4.3, 18, false],
-  ['Corporate Connect Events', 'corporate', 'tvm', 'Thiruvananthapuram City', 150000, 4.5, 27, false],
+// ---------------- Demo seed data (fictional, clearly marked) ----------------
+// Venues: [name, type, district, town, seating, dining, parking, acIdx, cateringIdx, morning, evening, full, rating, reviews, featured]
+const VENUES = [
+  ['Sree Lakshmi Auditorium', 'auditorium', 'tvm', 'Neyyattinkara', 1200, 600, 150, 0, 0, 65000, 55000, 105000, 4.7, 142, true],
+  ['Capital Convention Centre', 'convention', 'tvm', 'Thiruvananthapuram City', 2500, 1200, 400, 0, 2, 180000, 160000, 300000, 4.8, 96, true],
+  ['Ashtamudi Lakeview Hall', 'auditorium', 'klm', 'Kollam City', 900, 450, 120, 1, 0, 45000, 40000, 75000, 4.5, 88, false],
+  ['St. Mary’s Parish Hall', 'community-hall', 'klm', 'Kottarakkara', 600, 300, 60, 2, 0, 18000, 15000, 30000, 4.4, 51, false],
+  ['Pamba Valley Auditorium', 'auditorium', 'pta', 'Thiruvalla', 1000, 500, 140, 0, 0, 55000, 48000, 90000, 4.6, 73, false],
+  ['Kayal Convention Centre', 'convention', 'alp', 'Alappuzha', 1800, 900, 250, 0, 2, 120000, 100000, 200000, 4.7, 110, true],
+  ['Vembanad Houseboat Weddings', 'houseboat', 'alp', 'Kuttanad', 80, 60, 20, 0, 1, 90000, 90000, 150000, 4.9, 42, true],
+  ['Nila Community Hall', 'community-hall', 'alp', 'Cherthala', 500, 250, 50, 2, 0, 15000, 12000, 25000, 4.3, 39, false],
+  ['Kumarakom Lakeside Resort', 'backwater', 'ktm', 'Kumarakom', 400, 400, 100, 0, 1, 200000, 220000, 380000, 4.8, 55, true],
+  ['Meenachil Auditorium', 'auditorium', 'ktm', 'Pala', 1100, 550, 160, 1, 0, 50000, 45000, 85000, 4.6, 91, false],
+  ['Hilltop Mist Resort', 'resort', 'idk', 'Munnar', 300, 300, 80, 2, 1, 150000, 170000, 280000, 4.7, 47, false],
+  ['Thodupuzha Town Hall', 'community-hall', 'idk', 'Thodupuzha', 700, 350, 70, 2, 0, 20000, 18000, 35000, 4.2, 33, false],
+  ['Grand Pearl Convention Centre', 'convention', 'ekm', 'Kakkanad', 3000, 1500, 500, 0, 2, 220000, 200000, 380000, 4.8, 133, true],
+  ['Periyar Riverside Auditorium', 'auditorium', 'ekm', 'Aluva', 1400, 700, 200, 0, 0, 80000, 70000, 135000, 4.6, 118, false],
+  ['Fort Heritage Courtyard', 'resort', 'ekm', 'Fort Kochi', 350, 300, 40, 1, 1, 120000, 140000, 230000, 4.7, 64, false],
+  ['Vadakkumnathan Auditorium', 'auditorium', 'tsr', 'Thrissur', 1500, 750, 220, 0, 0, 75000, 65000, 125000, 4.7, 156, true],
+  ['Guruvayur Kalyana Mandapam', 'auditorium', 'tsr', 'Guruvayur', 1000, 500, 150, 1, 2, 40000, 35000, 65000, 4.8, 201, true],
+  ['Chalakudy Community Centre', 'community-hall', 'tsr', 'Chalakudy', 650, 320, 80, 2, 0, 16000, 14000, 26000, 4.3, 44, false],
+  ['Malampuzha Garden Venue', 'resort', 'pkd', 'Palakkad', 800, 500, 200, 2, 0, 60000, 70000, 115000, 4.5, 37, false],
+  ['Ottapalam Grand Auditorium', 'auditorium', 'pkd', 'Ottapalam', 1200, 600, 180, 1, 0, 48000, 42000, 80000, 4.5, 62, false],
+  ['Malabar Palace Auditorium', 'auditorium', 'mlp', 'Manjeri', 2000, 1000, 300, 0, 0, 90000, 85000, 160000, 4.8, 174, true],
+  ['Kottakkal Convention Centre', 'convention', 'mlp', 'Kottakkal', 2200, 1100, 280, 0, 2, 110000, 100000, 190000, 4.7, 98, false],
+  ['Tirur Town Auditorium', 'auditorium', 'mlp', 'Tirur', 1300, 650, 160, 1, 0, 55000, 50000, 95000, 4.5, 80, false],
+  ['Calicut Trade Centre', 'convention', 'kkd', 'Kozhikode', 2800, 1400, 450, 0, 2, 200000, 180000, 340000, 4.8, 121, true],
+  ['Beach Road Auditorium', 'auditorium', 'kkd', 'Kozhikode', 1200, 600, 150, 0, 0, 70000, 65000, 120000, 4.6, 102, false],
+  ['Vythiri Woods Resort', 'resort', 'wyd', 'Vythiri', 250, 250, 60, 2, 1, 130000, 150000, 250000, 4.7, 29, false],
+  ['Kalpetta Municipal Hall', 'community-hall', 'wyd', 'Kalpetta', 600, 300, 50, 2, 0, 14000, 12000, 24000, 4.2, 26, false],
+  ['Thalassery Heritage Auditorium', 'auditorium', 'knr', 'Thalassery', 1100, 550, 140, 1, 0, 52000, 46000, 88000, 4.6, 77, false],
+  ['Kannur Convention Centre', 'convention', 'knr', 'Kannur', 1800, 900, 260, 0, 2, 95000, 85000, 165000, 4.7, 69, false],
+  ['Bekal Fort View Venue', 'resort', 'ksd', 'Bekal', 500, 400, 120, 1, 1, 90000, 110000, 180000, 4.6, 33, false],
+  ['Kanhangad Auditorium', 'auditorium', 'ksd', 'Kanhangad', 1000, 500, 130, 1, 0, 42000, 38000, 72000, 4.4, 41, false],
+];
+
+// Add-on services: [name, category, district, town, startPrice, unit, rating, reviews]
+const SERVICES = [
+  ['Kayal Frames Studio', 'photography', 'alp', 'Alappuzha', 45000, '', 4.8, 126],
+  ['Mizhi Wedding Stories', 'cinematography', 'ekm', 'Kochi', 85000, '', 4.9, 98],
+  ['Thalam Chenda Sangham', 'chenda', 'tsr', 'Thrissur', 18000, '', 4.9, 61],
+  ['Annapoorna Sadya Caterers', 'sadya', 'ktm', 'Kottayam', 350, ' per plate', 4.7, 210],
+  ['Malabar Biriyani House Catering', 'catering', 'mlp', 'Manjeri', 450, ' per plate', 4.8, 167],
+  ['Swarna Bridal Studio', 'bridal-makeup', 'tvm', 'Thiruvananthapuram City', 25000, '', 4.8, 152],
+  ['Kalyanamandapam Stage Works', 'mandapam', 'tsr', 'Guruvayur', 45000, '', 4.7, 81],
+  ['Mylanchi Mehendi Arts', 'mehendi', 'mlp', 'Kottakkal', 6000, '', 4.9, 93],
 ];
 
 const PALETTES = [
@@ -116,58 +135,60 @@ const PALETTES = [
   ['#6d2338', '#f0d9a7'], ['#2f4a3a', '#c9a35b'], ['#7a4a1f', '#f3e2b8'], ['#4a1a2c', '#d6b16a'],
 ];
 
-function packagesFor(cat, base) {
-  const unit = ['sadya', 'catering', 'event-catering'].includes(cat) ? ' per plate'
-    : cat === 'invitations' ? ' per card' : '';
-  return [
-    { id: 'p1', name: 'Essential', price: base, unit, inclusions: ['Core service for the main event', 'Standard setup', 'Coordinator on the day'] },
-    { id: 'p2', name: 'Signature', price: Math.round(base * 1.7), unit, inclusions: ['Everything in Essential', 'Extended hours', 'Premium materials', 'Pre-event consultation'] },
-    { id: 'p3', name: 'Grand', price: Math.round(base * 2.8), unit, inclusions: ['Everything in Signature', 'Multi-day coverage', 'Dedicated team lead', 'Custom add-ons'] },
-  ];
+const POLICY = 'Slot held for 48 hours after the quotation. Booking confirmed on 25% advance. Date change allowed once, up to 60 days before the event. Advance is non-refundable within 30 days of the event. Electricity beyond the slot and cleaning charges as per actuals.';
+
+function base(i, id, name, category, district, town) {
+  const d = districtById(district);
+  return {
+    id, ownerId: id, isDemo: true, businessName: name, ownerName: 'Demo Owner',
+    phone: '+91 90000 0' + String(1000 + i), whatsapp: '919000001' + String(100 + i), email: `demo${i}@example.com`,
+    category, district, town, address: `${town}, ${d.en}, Kerala`,
+    serviceDistricts: [district], policies: POLICY, traditions: ['Hindu', 'Muslim', 'Christian', 'Traditional Kerala'],
+    palette: PALETTES[i % PALETTES.length], portfolio: [], status: 'approved', verified: i % 4 !== 3,
+    views: 200 + ((i * 137) % 900), createdAt: Date.now() - i * 86400000 * 2, offer: '',
+  };
 }
 
 export function buildSeedVendors() {
-  return SEED.map(([name, category, district, town, price, rating, reviews, featured], i) => {
-    const d = districtById(district);
-    const cat = catById(category);
-    const id = i === 0 ? 'demo_vendor' : `demo_${String(i).padStart(2, '0')}`;
+  const venues = VENUES.map(([name, cat, district, town, seating, dining, parking, ac, catering, m, e, f, rating, reviews, featured], i) => {
+    const id = i === 0 ? 'demo_vendor' : `demo_v${String(i).padStart(2, '0')}`;
+    const am = AMENITIES.filter((_, k) => (k + i) % 3 !== 0 || k < 4);
     return {
-      id,
-      ownerId: id,
-      isDemo: true,
-      businessName: name,
-      ownerName: 'Demo Owner',
-      phone: '+91 90000 0' + String(1000 + i),
-      whatsapp: '919000001' + String(100 + i),
-      email: `demo${i}@example.com`,
-      category,
-      district,
-      town,
-      serviceDistricts: [district, DISTRICTS[(DISTRICTS.indexOf(d) + 1) % 14].id],
-      address: `${town}, ${d.en}, Kerala`,
-      description: `${name} is a ${cat.en.toLowerCase()} business based in ${town}, serving ${d.en} and nearby districts. Experienced with Hindu, Muslim, Christian and traditional Kerala ceremonies. (Demo listing for testing.)`,
-      startingPrice: price,
-      priceUnit: packagesFor(category, price)[0].unit,
-      rating,
-      reviewCount: reviews,
-      packages: packagesFor(category, price),
-      policies: 'Booking confirmed on 30% advance. Free date change up to 60 days before the event. Advance is non-refundable within 30 days of the event.',
-      traditions: ['Hindu', 'Muslim', 'Christian', 'Traditional Kerala'],
-      palette: PALETTES[i % PALETTES.length],
-      portfolio: [],
-      status: 'approved',
-      verified: i % 3 !== 2,
-      featured,
-      offer: i % 5 === 0 ? '10% off on weekday bookings' : (i % 7 === 3 ? 'Free pre-event consultation' : ''),
-      blockedDates: [],
-      views: 200 + ((i * 137) % 900),
-      createdAt: Date.now() - i * 86400000 * 3,
+      ...base(i, id, name, cat, district, town),
+      description: `${name} is a ${catById(cat).en.toLowerCase().replace(/s$/, '')} in ${town}, ${districtById(district).en}, with seating for ${seating} guests and a ${dining}-seat dining hall. Hosts Hindu, Muslim, Christian and traditional Kerala weddings, receptions and functions. (Demo listing for testing.)`,
+      seating, dining, parking, rooms: 2 + (i % 4), ac: AC_TYPES[ac], catering: CATERING_RULES[catering], amenities: am,
+      slotPrices: { morning: m, evening: e, full: f }, startingPrice: Math.min(m, e), priceUnit: ' per slot',
+      rating, reviewCount: reviews, featured, offer: i % 6 === 0 ? 'Weekday bookings 15% off' : '',
     };
   });
+  const services = SERVICES.map(([name, cat, district, town, price, unit, rating, reviews], j) => {
+    const i = VENUES.length + j;
+    return {
+      ...base(i, `demo_s${String(j).padStart(2, '0')}`, name, cat, district, town),
+      description: `${name} offers ${catById(cat).en.toLowerCase()} in ${town} and nearby districts. (Demo listing for testing.)`,
+      startingPrice: price, priceUnit: unit, rating, reviewCount: reviews, featured: false,
+      packages: [
+        { id: 'p1', name: 'Essential', price, unit, inclusions: ['Core service for the main event', 'Standard setup'] },
+        { id: 'p2', name: 'Signature', price: Math.round(price * 1.7), unit, inclusions: ['Everything in Essential', 'Extended hours', 'Premium materials'] },
+      ],
+    };
+  });
+  return [...venues, ...services];
+}
+
+// A few booked slots so the availability calendar shows something in demo mode.
+export function buildSeedBookings() {
+  const out = []; const d0 = new Date();
+  [['demo_vendor', 3, 'morning'], ['demo_vendor', 3, 'evening'], ['demo_vendor', 10, 'morning'], ['demo_vendor', 17, 'evening'],
+    ['demo_v12', 5, 'morning'], ['demo_v15', 6, 'morning'], ['demo_v15', 6, 'evening'], ['demo_v20', 8, 'evening']].forEach(([v, days, slot]) => {
+    const d = new Date(d0.getTime() + days * 86400000).toISOString().slice(0, 10);
+    out.push({ id: `${v}_${d}_${slot}`, venueId: v, date: d, half: slot, source: 'manual', note: 'Offline booking (demo)' });
+  });
+  return out;
 }
 
 export const SEED_REVIEWS = [
-  { name: 'Anjali & Rahul', district: 'Kottayam', text: 'Found our sadya caterer and photographer in one evening. Comparing quotes side by side saved us so many calls.', rating: 5 },
-  { name: 'Fathima N.', district: 'Malappuram', text: 'The mehendi artist was wonderful, and the quotation clearly listed what was and wasn’t included.', rating: 5 },
-  { name: 'Joseph & Mariya', district: 'Ernakulam', text: 'Booked a backwater venue for our reception. Negotiating inside the app kept everything in writing.', rating: 4 },
+  { name: 'Anjali & Rahul', district: 'Kottayam', text: 'We checked which auditoriums were free on our date in one search, instead of calling ten halls.', rating: 5 },
+  { name: 'Fathima N.', district: 'Malappuram', text: 'Comparing hall rent, dining capacity and parking side by side made the choice easy.', rating: 5 },
+  { name: 'Joseph & Mariya', district: 'Ernakulam', text: 'Negotiated the evening slot price in the app, and everything stayed in writing.', rating: 4 },
 ];

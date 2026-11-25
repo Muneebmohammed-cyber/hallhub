@@ -45,6 +45,26 @@ service cloud.firestore {
         || (signedIn() && resource.data.vendorOwnerId == uid() && changed().hasOnly(['status', 'updatedAt']) && request.resource.data.status == 'superseded');
     }
 
+    // One document per venue, date and half-day. Docs can only be created, never overwritten,
+    // so a second booking of the same slot is rejected by the database itself (no double bookings).
+    match /slots/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (signedIn()
+        && id == request.resource.data.venueId + '_' + request.resource.data.date + '_' + request.resource.data.half
+        && request.resource.data.half in ['morning', 'evening']
+        && (
+          (request.resource.data.source == 'manual'
+            && get(/databases/$(database)/documents/vendors/$(request.resource.data.venueId)).data.ownerId == uid())
+          || (request.resource.data.source == 'booking'
+            && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.customerId == uid()
+            && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.vendorId == request.resource.data.venueId
+            && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.date == request.resource.data.date
+            && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.status == 'quoted')
+        ));
+      allow delete: if isAdmin() || (signedIn() && resource.data.source == 'manual'
+        && get(/databases/$(database)/documents/vendors/$(resource.data.venueId)).data.ownerId == uid());
+    }
+
     match /events/{id} {
       allow read, update, delete: if signedIn() && (resource.data.ownerId == uid() || isAdmin());
       allow create: if signedIn() && request.resource.data.ownerId == uid();

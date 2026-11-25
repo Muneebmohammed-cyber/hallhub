@@ -2,18 +2,19 @@
 // db.get(col, id) · db.list(col, [field, value]?) · db.add(col, data) · db.set(col, id, data) · db.update(col, id, patch)
 // auth.onChange(cb) · auth.google() · auth.sendOtp(phone, buttonId) · auth.verifyOtp(code) · auth.demo(role) · auth.signOut()
 import { firebaseConfig, DEMO_MODE } from './config.js';
-import { buildSeedVendors } from './data.js';
+import { buildSeedVendors, buildSeedBookings } from './data.js';
 
 export let db, auth;
 
 if (DEMO_MODE) {
-  const KEY = 'mg_demo_db_v1';
+  const KEY = 'hh_demo_db_v2';
   const load = () => JSON.parse(localStorage.getItem(KEY) || 'null');
   const persist = (s) => localStorage.setItem(KEY, JSON.stringify(s));
   let state = load();
   if (!state) {
-    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, media: {} };
+    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, slots: {} };
     buildSeedVendors().forEach((v) => { state.vendors[v.id] = v; });
+    buildSeedBookings().forEach((b) => { state.slots[b.id] = b; });
     state.users.demo_customer = { id: 'demo_customer', name: 'Demo Customer', phone: '+91 90000 00001', role: 'customer', isDemo: true };
     state.users.demo_vendor = { id: 'demo_vendor', name: 'Demo Vendor', phone: '+91 90000 01000', role: 'vendor', isDemo: true };
     state.users.demo_admin = { id: 'demo_admin', name: 'Demo Admin', role: 'admin', isDemo: true };
@@ -31,17 +32,23 @@ if (DEMO_MODE) {
     async add(col, data) { const id = uid(); state[col][id] = { ...data, id, createdAt: Date.now() }; persist(state); return id; },
     async set(col, id, data) { state[col][id] = { ...data, id }; persist(state); return id; },
     async update(col, id, patch) { state[col][id] = { ...state[col][id], ...patch, updatedAt: Date.now() }; persist(state); },
+    async remove(col, id) { delete state[col][id]; persist(state); },
+    // Create several docs at once; fails (writing nothing) if any already exists — used to block double bookings.
+    async createMany(col, docs) {
+      if (docs.some(([id]) => state[col][id])) throw new Error('ALREADY_TAKEN');
+      docs.forEach(([id, data]) => { state[col][id] = { ...data, id, createdAt: Date.now() }; }); persist(state);
+    },
     async reset() { localStorage.removeItem(KEY); },
   };
   let listener = () => {};
-  const current = () => localStorage.getItem('mg_demo_uid');
+  const current = () => localStorage.getItem('hh_demo_uid');
   auth = {
     onChange(cb) { listener = cb; cb(current() ? { uid: current() } : null); },
-    async demo(role) { localStorage.setItem('mg_demo_uid', 'demo_' + role); listener({ uid: 'demo_' + role }); },
+    async demo(role) { localStorage.setItem('hh_demo_uid', 'demo_' + role); listener({ uid: 'demo_' + role }); },
     async google() { throw new Error('Google sign-in needs Firebase. Use a demo account in demo mode.'); },
     async sendOtp() { throw new Error('OTP needs Firebase. Use a demo account in demo mode.'); },
     async verifyOtp() {},
-    async signOut() { localStorage.removeItem('mg_demo_uid'); listener(null); },
+    async signOut() { localStorage.removeItem('hh_demo_uid'); listener(null); },
   };
 } else {
   const V = '10.12.2';
@@ -62,6 +69,13 @@ if (DEMO_MODE) {
     async add(col, data) { const r = await fs.addDoc(fs.collection(F, col), { ...data, createdAt: Date.now() }); return r.id; },
     async set(col, id, data) { await fs.setDoc(fs.doc(F, col, id), data); return id; },
     async update(col, id, patch) { await fs.updateDoc(fs.doc(F, col, id), { ...patch, updatedAt: Date.now() }); },
+    async remove(col, id) { await fs.deleteDoc(fs.doc(F, col, id)); },
+    // Atomic: security rules only allow *creating* slot docs, so if any slot already exists the whole batch is rejected.
+    async createMany(col, docs) {
+      const b = fs.writeBatch(F);
+      docs.forEach(([id, data]) => b.set(fs.doc(F, col, id), { ...data, createdAt: Date.now() }));
+      try { await b.commit(); } catch (e) { throw new Error(e.code === 'permission-denied' ? 'ALREADY_TAKEN' : e.message); }
+    },
     async reset() {},
   };
   auth = {
