@@ -7,6 +7,14 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
 - **Search by date and slot:** pick a district, date, slot (morning 7 am–3 pm, evening 4 pm–11 pm, or full day) and guest count. You only see halls that are free and big enough.
 - **Filters:** venue type, town, AC or non-AC, catering rule (outside caterers allowed or in-house only), parking, price per slot, rating, verified only. Sort by popularity, rating, price or capacity.
 - **Venue page:** seating, dining and parking capacity, AC, catering rule, bridal rooms, facilities, hall rent per slot, a live availability calendar, Google Maps link, WhatsApp and call buttons, booking policies.
+- **Plan my event:** enter event, district, guests, budget, a preferred date and how flexible you are. A grid shows every hall that fits and which nearby dates are free, sorted by real total cost, with "in budget" flags.
+- **True total cost on every hall page:** rent + food for your guests + overtime electricity + cleaning + generator + GST + decoration, with a per-guest figure and a checklist of questions to ask before paying.
+- **Compare up to 3 halls side by side** (free on your date, estimated total, capacity, parking, AC, catering rules, extra charges, cancellation terms) and **ask family on WhatsApp** with one tap.
+- **Busy-date heatmap:** dates when many halls in the district are already booked are marked, so customers book early.
+- **Plan B halls:** when a date is taken, similar halls free that day are suggested right away.
+- **Date alerts:** "Tell me if it frees up" on a booked date. If it gets cancelled, the customer sees a "Good news" card on the home screen.
+- **Clear cancellation terms** on every hall (free / partly refundable / non-refundable), set by the owner.
+- **Digital invitation** for an event, with the venue's exact Google Maps location, to share on WhatsApp or print.
 - **Booking request → quotation → negotiation → confirmation:** the venue sends a quotation (pre-filled with the slot rent and a 25% advance). The customer accepts, asks for a lower price, or declines, and every version is kept.
 - **No double bookings:** when a customer accepts, the slot is locked in the database (one record per venue, date and half-day, which can be created but never overwritten). If two people try to take the same slot, the second gets "this slot was just booked".
 - **Owner register (replaces the paper booking diary):**

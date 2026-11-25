@@ -7,7 +7,7 @@ import { buildSeedVendors, buildSeedBookings, buildRealHalls, buildSeedRegister 
 export let db, auth;
 
 if (DEMO_MODE) {
-  const KEY = 'hh_demo_db_v4';
+  const KEY = 'hh_demo_db_v6';
   const load = () => JSON.parse(localStorage.getItem(KEY) || 'null');
   const persist = (s) => localStorage.setItem(KEY, JSON.stringify(s));
   let state = load();

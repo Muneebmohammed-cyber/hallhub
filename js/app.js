@@ -11,7 +11,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const today = () => new Date().toISOString().slice(0, 10);
+const localISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const today = () => localISO(new Date());
 const distName = (id) => { const d = districtById(id); return d ? nameOf(d) : ''; };
 const catName = (id) => catById(id)?.en || id;
 function toast(msg) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 2600); }
@@ -70,7 +71,7 @@ function shell(inner) {
       ${S.user ? '' : `<a class="btn sm" href="#/login">${t('login')}</a>`}
     </div>
   </div></header>
-  <main id="view">${inner}</main>
+  <main id="view">${inner}</main>${compareBar()}
   <nav class="bottomnav">${nav.map(([h, k, ic]) => `<a href="${h}" class="${active(h) ? 'on' : ''}"><span class="ic">${icon(NAV_ICON[k] || 'home')}</span>${t(k)}</a>`).join('')}</nav>`;
 }
 
@@ -84,7 +85,7 @@ const slotName = (id) => { const x = slotById(id); return x ? nameOf(x) : id; };
 const slotLabel = (id) => { const x = slotById(id); return x ? `${nameOf(x)} (${x.time})` : id; };
 function takenMap(rows) { const m = {}; rows.forEach((r) => { (m[r.date] = m[r.date] || []).push(r.half); }); return m; }
 async function venueSlots(venueId) { return db.list('slots', ['venueId', venueId]); }
-function calendarHTML(ym, taken, { selected = '', pickable = true } = {}) {
+function calendarHTML(ym, taken, { selected = '', pickable = true, demand = null } = {}) {
   const [y, m] = ym.split('-').map(Number);
   const first = new Date(y, m - 1, 1); const days = new Date(y, m, 0).getDate();
   const lead = (first.getDay() + 6) % 7; const tdy = today();
@@ -95,12 +96,13 @@ function calendarHTML(ym, taken, { selected = '', pickable = true } = {}) {
     const tk = taken[ds] || []; const past = ds < tdy;
     const cls = past ? 'past' : tk.length >= 2 ? 'd-full' : tk.length === 1 ? 'd-half' : 'd-free';
     const dots = `<i class="${tk.includes('morning') ? 'x' : ''}"></i><i class="${tk.includes('evening') ? 'x' : ''}"></i>`;
-    cells.push(`<button type="button" class="day ${cls} ${ds === selected ? 'sel' : ''}" ${past || !pickable ? 'disabled' : ''} data-day="${ds}">${d}<span>${past ? '' : dots}</span></button>`);
+    const dm = demand && !past ? demand[ds] || 0 : 0; const heat = dm >= 0.3 ? 'hot' : '';
+    cells.push(`<button type="button" class="day ${cls} ${heat} ${ds === selected ? 'sel' : ''}" ${past || !pickable ? 'disabled' : ''} data-day="${ds}">${d}<span>${past ? '' : dots}</span></button>`);
   }
   const title = first.toLocaleDateString(getLang() === 'ml' ? 'ml-IN' : 'en-IN', { month: 'long', year: 'numeric' });
   return `<div class="cal"><div class="row between cal-head"><button type="button" class="btn sm ghost" data-cal="-1">‹</button><b>${title}</b><button type="button" class="btn sm ghost" data-cal="1">›</button></div>
     <div class="cal-grid">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((x) => `<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>
-    <div class="row wrap-x small muted cal-key"><span><i class="k k-free"></i>${t('available')}</span><span><i class="k k-half"></i>Half booked</span><span><i class="k k-full"></i>${t('booked')}</span><span>Dots: morning · evening</span></div></div>`;
+    <div class="row wrap-x small muted cal-key"><span><i class="k k-free"></i>${t('available')}</span><span><i class="k k-half"></i>Half booked</span><span><i class="k k-full"></i>${t('booked')}</span><span>Dots: morning · evening</span>${demand ? '<span><i class="k k-hot"></i>Busy date in this district</span>' : ''}</div></div>`;
 }
 const addMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 function venueFacts(v) {
@@ -165,6 +167,8 @@ async function viewHome() {
   const offers = venues.filter((v) => v.offer).slice(0, 4);
   const services = vs.filter((v) => !isVenue(v)).slice(0, 8);
   const corridor = vs.filter((v) => v.corridor === 'chavakkad-ponnani');
+  const freed = await freedAlerts();
+  const vById = Object.fromEntries(vs.map((v) => [v.id, v]));
   const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
     html: `
@@ -179,8 +183,10 @@ async function viewHome() {
         <input type="number" name="guests" min="1" placeholder="${t('guests')}">
         <button class="btn">${t('checkAvail')}</button>
       </form>
+      <a class="plan-link" href="#/plan"><b>Plan my event</b><span>Flexible dates, real total cost and every hall that fits</span></a>
     </div></section>
     <div class="wrap">
+      ${freed.map((a) => `<div class="card alert-card"><div><b>Good news: ${esc(vById[a.venueId]?.businessName || 'A hall you watched')} is free</b><div class="small muted">${fmtDate(a.date)} · ${esc(slotLabel(a.slot))}</div></div><div class="row"><a class="btn sm" href="#/enquire/${a.venueId}?date=${a.date}&slot=${a.slot}">Request it</a><button class="btn sm ghost" data-dismiss="${a.i}">Dismiss</button></div></div>`).join('')}
       <section class="section">
         <div class="section-head"><h2>${t('venues')}</h2></div>
         <div class="cat-grid">${types.map((c) => `<a class="cat" href="#/explore?cat=${c.id}" style="background-image:${coverURL({ id: 'cat-' + c.id, category: c.id })}">${esc(c.en)}</a>`).join('')}</div>
@@ -202,6 +208,7 @@ async function viewHome() {
       <section class="section card center stack"><h2>Own an auditorium or hall?</h2><p class="muted">List it free, manage your booking calendar and send quotations from one dashboard.</p><a class="btn gold" href="#/vendor/register">List your venue</a></section>
     </div>`,
     mount() {
+      $$('[data-dismiss]').forEach((b) => { b.onclick = () => { dropAlert(Number(b.dataset.dismiss)); render(); }; });
       $('#homeSearch').onsubmit = (e) => { e.preventDefault(); const f = formData(e.target); go('#/explore?' + new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString()); };
     },
   };
@@ -299,7 +306,9 @@ async function viewVendor(id) {
   const fav = (S.profile?.favourites || []).includes(id);
   const venue = isVenue(v);
   const taken = venue ? takenMap(await venueSlots(id)) : {};
-  let ym = today().slice(0, 7); let pickDate = ''; let pickSlot = '';
+  const demand = venue ? await demandMap(v.district) : null;
+  const pr = planPrefs(); const inCompare = compareList().includes(id);
+  let ym = (pr.date && pr.date >= today() ? pr.date : today()).slice(0, 7); let pickDate = pr.date && pr.date >= today() ? pr.date : ''; let pickSlot = '';
   const wa = v.whatsapp ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Hi ${v.businessName}, I found you on HallHub and would like to enquire about your services.`)}` : '';
   return {
     html: `
@@ -310,7 +319,7 @@ async function viewVendor(id) {
         <div><h1 style="margin:0">${esc(v.businessName)}</h1>
         <div class="muted">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}</div>
         <div class="stars" style="margin-top:4px">★ ${Number(v.rating || 0).toFixed(1)} <span class="muted small">· ${v.reviewCount || 0} reviews</span></div></div>
-        <button class="btn ghost sm" data-act="fav" data-id="${id}">${fav ? '♥ Saved' : '♡ Save'}</button>
+        <div class="row">${venue ? `<button class="btn ghost sm" data-act="cmp">${inCompare ? '✓ Comparing' : 'Compare'}</button>` : ''}<button class="btn ghost sm" data-act="fav" data-id="${id}">${fav ? '♥ Saved' : '♡ Save'}</button></div>
       </div>
       <div class="card row between wrap-x"><div><div class="small muted">${t('startingAt')}</div><div class="price" style="font-size:1.4rem">${money(v.startingPrice)}<span class="small muted">${esc(v.priceUnit || '')}</span></div></div>
         <div class="row wrap-x"><a class="btn" href="${venue ? '#cal' : '#/enquire/' + id}" ${venue ? 'data-act="toCal"' : ''}>${venue ? t('checkAvail') : t('requestQuote')}</a>${wa ? `<a class="btn green" target="_blank" rel="noopener" href="${wa}">${t('whatsapp')}</a>` : ''}${v.phone ? `<a class="btn ghost" href="tel:${esc(v.phone.replace(/\s/g, ''))}">Call</a>` : ''}</div></div>
@@ -322,7 +331,20 @@ async function viewVendor(id) {
         <div class="amen">${(v.amenities || []).map((a) => `<span>✓ ${esc(a)}</span>`).join('')}</div></div>
       <div class="card"><h3>Hall rent</h3><table class="cmp">${SLOTS.map((x) => `<tr><td>${nameOf(x)} <span class="small muted">${x.time}</span></td><td class="price">${v.slotPrices?.[x.id] ? money(v.slotPrices[x.id]) : '—'}</td></tr>`).join('')}</table>
         <p class="small muted" style="margin:.6em 0 0">Rent for the hall only. Catering, decoration and electricity beyond the slot are quoted separately.</p></div>
-      <div class="card stack" id="cal"><h3 style="margin:0">${t('checkAvail')}</h3><div id="calBox"></div><div id="slotBox"></div></div>` : ''}
+      <div class="card stack" id="cal"><h3 style="margin:0">${t('checkAvail')}</h3><div id="calBox"></div><div id="slotBox"></div></div>
+      <div class="card stack" id="est"><h3 style="margin:0">What will it really cost?</h3>
+        <form id="estF" class="form-grid">
+          <div><label>Guests</label><input type="number" name="guests" min="0" value="${esc(pr.guests || Math.round((v.seating || 500) * 0.8))}"></div>
+          <div><label>Slot</label><select name="slot">${SLOTS.map((x) => `<option value="${x.id}" ${x.id === (pr.slot || 'full') ? 'selected' : ''}>${nameOf(x)}</option>`).join('')}</select></div>
+          <div><label>Food per plate (₹)</label><input type="number" name="perPlate" min="0" value="${esc(v.charges?.perPlate || pr.plate || 400)}"></div>
+          <div><label>Extra hours beyond slot</label><input type="number" name="hoursOver" min="0" value="0"></div>
+          <div><label>Decoration budget (₹)</label><input type="number" name="decor" min="0" value="0"></div>
+        </form><div id="estOut"></div>
+        <details><summary class="small" style="cursor:pointer;font-weight:600">Ask the hall before you pay an advance</summary><ul class="small" style="margin:.5em 0 0;padding-left:18px">
+          <li>Is the quoted rent for the hall only, or does it include chairs, AC, generator and cleaning?</li><li>What is charged per extra hour, and from what time?</li>
+          <li>Are we free to bring our own caterer and decorator, or must we use theirs?</li><li>Is parking attended, and is valet extra?</li><li>Get the cancellation and date-change terms in writing.</li></ul></details>
+      </div>
+      <div class="card stack"><div class="row between"><h3 style="margin:0">Cancellation</h3>${cancelBadge(v)}</div><p class="small" style="margin:0">${esc(cancelText(v))}</p></div>` : ''}
       ${venue ? '' : `<div><h2>${t('packages')}</h2><div class="grid">${(v.packages || []).map((k) => `<div class="pkg"><div class="row between"><h3 style="margin:0">${esc(k.name)}</h3><span class="price">${money(k.price)}<span class="small muted">${esc(k.unit || '')}</span></span></div><ul>${(k.inclusions || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul><a class="btn sm ghost" style="margin-top:10px" href="#/enquire/${id}?pkg=${k.id}">Enquire for this package</a></div>`).join('') || '<p class="muted">No packages yet — request a custom quotation.</p>'}</div></div>`}
       ${v.portfolio?.length ? `<div><h2>Portfolio</h2><div class="gallery">${v.portfolio.map((src) => `<img src="${src}" alt="Portfolio">`).join('')}</div></div>` : ''}
       ${v.videos?.length ? `<div class="card"><h3>Videos</h3>${v.videos.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`).join('<br>')}</div>` : ''}
@@ -336,17 +358,34 @@ async function viewVendor(id) {
     mount() {
       if (!venue) return;
       const draw = () => {
-        $('#calBox').innerHTML = calendarHTML(ym, taken, { selected: pickDate });
+        $('#calBox').innerHTML = calendarHTML(ym, taken, { selected: pickDate, demand });
         const tk = taken[pickDate] || [];
         $('#slotBox').innerHTML = pickDate ? `<div class="stack"><b>${fmtDate(pickDate)}</b><div class="slot-pick">${SLOTS.map((x) => { const ok = slotFree(tk, x.id); return `<button type="button" class="slot-opt ${pickSlot === x.id ? 'on' : ''}" data-slot="${x.id}" ${ok ? '' : 'disabled'}><b>${nameOf(x)}</b><span class="small muted">${x.time}</span><br><span class="price">${ok ? money(v.slotPrices?.[x.id]) : t('booked')}</span></button>`; }).join('')}</div>
-          ${pickSlot ? `<a class="btn block" href="#/enquire/${id}?date=${pickDate}&slot=${pickSlot}">${t('bookSlot')} · ${slotName(pickSlot)}</a>` : '<p class="small muted" style="margin:0">Choose a slot.</p>'}</div>` : '<p class="small muted" style="margin:0">Tap a date to see free slots.</p>';
+          ${pickSlot ? `<a class="btn block" href="#/enquire/${id}?date=${pickDate}&slot=${pickSlot}">${t('bookSlot')} · ${slotName(pickSlot)}</a>` : '<p class="small muted" style="margin:0">Choose a slot.</p>'}
+          ${(demand[pickDate] || 0) >= 0.3 ? '<p class="small" style="margin:0;color:var(--warn)">This is a busy date in the district. Halls are filling up, so request soon.</p>' : ''}
+          ${tk.length ? `<div class="msg stack" style="margin-top:4px"><div class="row between wrap-x"><b class="small">${tk.length >= 2 ? 'Fully booked on this date' : 'Partly booked on this date'}</b><button type="button" class="btn sm ghost" data-act="alert">Tell me if it frees up</button></div><div id="pb" class="small muted">Looking for similar halls free that day…</div></div>` : ''}</div>` : '<p class="small muted" style="margin:0">Tap a date to see free slots.</p>';
+        if (tk.length) planB(v, pickDate, tk.length >= 2 ? 'full' : (tk.includes('morning') ? 'evening' : 'morning')).then((alts) => {
+          const el = $('#pb'); if (!el) return;
+          el.innerHTML = alts.length ? `<b style="color:var(--ink)">Plan B: similar halls free that day</b>${alts.map((a) => `<a class="list-item" href="#/v/${a.id}" style="color:var(--ink);padding:8px 0"><span>${esc(a.businessName)}<span class="muted"> · ${esc(a.town)} · seats ${a.seating}</span></span><span class="price">${money(a.slotPrices?.full)}</span></a>`).join('')}` : 'No similar halls free nearby that day.';
+        });
       };
+      const estDraw = () => {
+        const x = formData($('#estF')); const e = estimate(v, x);
+        LS.set('hh_plan', { ...planPrefs(), guests: x.guests, slot: x.slot, plate: x.perPlate });
+        const line = (l, n, note = '') => (n ? `<tr><td>${l}${note ? `<div class="small muted">${note}</div>` : ''}</td><td>${money(n)}</td></tr>` : '');
+        $('#estOut').innerHTML = `<table class="cmp">${line('Hall rent · ' + slotName(x.slot), e.rent)}${line('Food', e.food, `${x.guests || 0} guests × ${money(e.plate)}${v.charges?.perPlate ? ' (in-house rate)' : ' (your caterer, estimate)'}`)}
+          ${line('Overtime electricity', e.elec, `${x.hoursOver} hr × ${money(v.charges?.electricityPerHour)}`)}${line('Cleaning', e.cleaning)}${line('Generator', e.gen)}${line('GST on rent', e.gst, (v.charges?.gstPct || 0) + '%')}${line('Decoration', e.decor)}
+          <tr><td><b>Estimated total</b></td><td><b>${money(e.total)}</b>${e.perGuest ? `<div class="small muted">${money(e.perGuest)} per guest</div>` : ''}</td></tr></table>`;
+      };
+      $('#estF').oninput = estDraw; estDraw();
       draw();
       $('#cal').onclick = (e) => {
         const c = e.target.closest('[data-cal]'); if (c) { ym = addMonth(ym, Number(c.dataset.cal)); return draw(); }
         const d = e.target.closest('[data-day]'); if (d) { pickDate = d.dataset.day; pickSlot = ''; return draw(); }
         const sl = e.target.closest('[data-slot]'); if (sl) { pickSlot = sl.dataset.slot; draw(); }
+        if (e.target.closest('[data-act=alert]')) { const tk = taken[pickDate] || []; addAlert({ venueId: id, date: pickDate, slot: tk.length >= 2 ? 'full' : tk.includes('morning') ? 'morning' : 'evening' }); toast("We'll show it on your home screen if it frees up"); }
       };
+      $('[data-act=cmp]').onclick = (e) => { const l = toggleCompare(id); e.target.textContent = l.includes(id) ? '✓ Comparing' : 'Compare'; toast(l.includes(id) ? `Added to compare (${l.length}/3)` : 'Removed from compare'); render(); };
       const tc = $('[data-act=toCal]'); if (tc) tc.onclick = (e) => { e.preventDefault(); $('#cal').scrollIntoView({ behavior: 'smooth' }); };
     },
   };
@@ -526,7 +565,7 @@ async function viewEnquiry(id) {
           }
           await db.update('quotations', latest.id, { status: 'accepted' });
           await db.update('enquiries', id, { status: 'confirmed', acceptedQuoteId: latest.id, finalAmount: Number(latest.total) + Number(latest.additional || 0), advanceDue: Number(latest.advance), confirmedAt: Date.now() });
-          toast('Booking confirmed 🎉'); render();
+          slotCache = null; toast('Booking confirmed 🎉'); render();
         }
         if (b.dataset.act === 'closeEnq' && confirm('Decline this quotation and close the enquiry?')) { await db.update('enquiries', id, { status: 'closed' }); await db.update('quotations', latest.id, { status: 'declined' }); render(); }
         if (b.dataset.act === 'vendorDecline' && confirm('Decline this enquiry?')) { await db.update('enquiries', id, { status: 'declined' }); render(); }
@@ -579,7 +618,7 @@ async function viewEvents() {
           ${days !== null && days >= 0 ? `<span class="badge gold">${days} days to go</span>` : ''}</div>
           <div class="stat-grid"><div class="stat"><b>${mine.length}</b><span>Vendors enquired</span></div><div class="stat"><b>${mine.filter((e) => e.status === 'confirmed').length}</b><span>Booked</span></div>
           <div class="stat"><b>${money(committed)}</b><span>Committed${ev.budget ? ' of ' + money(ev.budget) : ''}</span></div></div>
-          <div class="row wrap-x"><a class="btn sm" href="#/compare/${ev.id}">${t('compare')}</a><a class="btn sm ghost" href="#/explore">Add vendors</a></div></div>`;
+          <div class="row wrap-x"><a class="btn sm" href="#/compare/${ev.id}">${t('compare')}</a><a class="btn sm ghost" href="#/invite/${ev.id}">Create invitation</a><a class="btn sm ghost" href="#/explore">Add vendors</a></div></div>`;
       }).join('') || '<div class="card muted">No events yet. Create one, or send an enquiry and we’ll create it for you.</div>'}
       ${favs.length ? `<h2>Saved vendors</h2><div class="grid">${favs.map((v) => vendorCard(v)).join('')}</div>` : ''}
       <p class="small muted">Full budget tracking, checklist and family sharing arrive in Phase 3.</p>
@@ -835,6 +874,13 @@ async function viewVendorServices() {
           <div><label>Air-conditioning</label><select name="ac">${AC_TYPES.map((x) => `<option ${x === v.ac ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
           <div><label>Catering</label><select name="catering">${CATERING_RULES.map((x) => `<option ${x === v.catering ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
           ${SLOTS.map((x) => `<div><label>${x.en} rent (₹) · ${x.time}</label><input type="number" name="price_${x.id}" min="0" required value="${v.slotPrices?.[x.id] || ''}"></div>`).join('')}
+          <div><label>Overtime electricity (₹ per hour)</label><input type="number" name="c_elec" min="0" value="${v.charges?.electricityPerHour || 0}"></div>
+          <div><label>Cleaning charge (₹)</label><input type="number" name="c_clean" min="0" value="${v.charges?.cleaning || 0}"></div>
+          <div><label>Generator charge (₹)</label><input type="number" name="c_gen" min="0" value="${v.charges?.generator || 0}"></div>
+          <div><label>GST on rent (%)</label><input type="number" name="c_gst" min="0" max="28" value="${v.charges?.gstPct ?? 18}"></div>
+          <div><label>In-house food per plate (₹, 0 if none)</label><input type="number" name="c_plate" min="0" value="${v.charges?.perPlate || 0}"></div>
+          <div><label>Refund if cancelled (% of advance)</label><input type="number" name="x_pct" min="0" max="100" value="${v.cancel?.refundPct ?? 0}"></div>
+          <div><label>…if cancelled at least (days before)</label><input type="number" name="x_days" min="0" value="${v.cancel?.freeDays ?? 0}"></div>
           <div class="full"><label>Facilities</label><div class="row wrap-x">${AMENITIES.map((a) => `<label class="chip" style="margin:0"><input type="checkbox" name="amen" value="${a}" ${(v.amenities || []).includes(a) ? 'checked' : ''} style="width:auto"> ${a}</label>`).join('')}</div></div>
         </div>` : `<div class="card stack"><div class="row between"><h3 style="margin:0">${t('packages')}</h3><button type="button" class="btn sm" data-act="addPkg">+ Add package</button></div><div id="pkgs" class="stack">${(v.packages || []).map(pkgRow).join('')}</div></div>`}
         <div class="card form-grid">
@@ -866,7 +912,9 @@ async function viewVendorServices() {
         const cheapest = packages.find((k) => k.price === Math.min(...prices));
         const blocked = venue ? [] : fd.get('blocked').split('\n').map((x) => x.trim()).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x));
         const slotPrices = venue ? Object.fromEntries(SLOTS.map((x) => [x.id, Number(fd.get('price_' + x.id)) || 0])) : null;
-        const venuePatch = venue ? { category: fd.get('category'), seating: Number(fd.get('seating')), dining: Number(fd.get('dining')) || 0, parking: Number(fd.get('parking')) || 0, rooms: Number(fd.get('rooms')) || 0, ac: fd.get('ac'), catering: fd.get('catering'), amenities: fd.getAll('amen'), slotPrices, startingPrice: Math.min(...[slotPrices.morning, slotPrices.evening, slotPrices.full].filter((n) => n > 0).concat([]).slice(0, 3), ...([slotPrices.morning, slotPrices.evening, slotPrices.full].some((n) => n > 0) ? [] : [0])), priceUnit: ' per slot' } : {};
+        const venuePatch = venue ? { category: fd.get('category'), seating: Number(fd.get('seating')), dining: Number(fd.get('dining')) || 0, parking: Number(fd.get('parking')) || 0, rooms: Number(fd.get('rooms')) || 0, ac: fd.get('ac'), catering: fd.get('catering'), amenities: fd.getAll('amen'), slotPrices,
+          charges: { electricityPerHour: Number(fd.get('c_elec')) || 0, cleaning: Number(fd.get('c_clean')) || 0, generator: Number(fd.get('c_gen')) || 0, gstPct: Number(fd.get('c_gst')) || 0, perPlate: Number(fd.get('c_plate')) || 0 },
+          cancel: { refundPct: Number(fd.get('x_pct')) || 0, freeDays: Number(fd.get('x_days')) || 0 }, startingPrice: Math.min(...[slotPrices.morning, slotPrices.evening, slotPrices.full].filter((n) => n > 0).concat([]).slice(0, 3), ...([slotPrices.morning, slotPrices.evening, slotPrices.full].some((n) => n > 0) ? [] : [0])), priceUnit: ' per slot' } : {};
         const patch = { packages, startingPrice: prices.length ? Math.min(...prices) : 0, priceUnit: cheapest?.unit || '', ...venuePatch, description: fd.get('description'), policies: fd.get('policies'), offer: fd.get('offer'), videos: fd.get('videos').split(',').map((x) => x.trim()).filter(Boolean), traditions: fd.getAll('trad'), blockedDates: blocked, portfolio };
         try { await db.update('vendors', S.user.uid, patch); Object.assign(S.vendor, patch); vendorCache = null; toast('Saved'); } catch (err) { toast(err.message.includes('size') ? 'Images too large — remove one and try again' : err.message); }
       };
@@ -931,6 +979,184 @@ async function viewAdmin(tab) {
 function dupes(vs) {
   const by = {}; vs.forEach((v) => { const k = (v.phone || '').replace(/\D/g, ''); if (k) (by[k] = by[k] || []).push(v); });
   return Object.values(by).filter((g) => g.length > 1).map((g) => `<div class="list-item"><div class="small">${g.map((v) => esc(v.businessName)).join(' · ')}</div><span class="badge warn">same phone</span></div>`).join('');
+}
+
+// =====================================================================
+// CUSTOMER TOOLS — planner, true cost, compare, alerts, demand, Plan B, invites
+// =====================================================================
+const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } } };
+const compareList = () => LS.get('hh_compare', []);
+function toggleCompare(id) { let l = compareList(); l = l.includes(id) ? l.filter((x) => x !== id) : [...l, id].slice(-3); LS.set('hh_compare', l); return l; }
+const planPrefs = () => LS.get('hh_plan', {});
+
+function estimate(v, { guests = 0, slot = 'full', perPlate, hoursOver = 0, decor = 0 } = {}) {
+  const c = v.charges || {};
+  const rent = Number(v.slotPrices?.[slot] || 0);
+  const plate = perPlate === undefined || perPlate === '' ? (c.perPlate || 400) : Number(perPlate);
+  const food = Number(guests || 0) * plate;
+  const elec = Number(hoursOver || 0) * (c.electricityPerHour || 0);
+  const cleaning = c.cleaning || 0; const gen = c.generator || 0;
+  const gst = Math.round((rent * (c.gstPct || 0)) / 100);
+  const total = rent + food + elec + cleaning + gen + gst + Number(decor || 0);
+  return { rent, plate, food, elec, cleaning, gen, gst, decor: Number(decor || 0), total, perGuest: guests ? Math.round(total / guests) : 0 };
+}
+function cancelText(v) {
+  const c = v.cancel;
+  if (!c) return 'Not listed. Ask the venue for its cancellation terms in writing before paying.';
+  if (!c.freeDays || !c.refundPct) return 'Advance is not refundable once paid.';
+  return `${c.refundPct}% of the advance is refunded if you cancel at least ${c.freeDays} days before the event.`;
+}
+function cancelBadge(v) {
+  const c = v.cancel; if (!c) return '';
+  return c.refundPct === 100 ? '<span class="badge ok">Free cancellation</span>' : c.refundPct ? '<span class="badge warn">Partly refundable</span>' : '<span class="badge bad">Non-refundable</span>';
+}
+
+let slotCache = null;
+async function allSlots(force) { if (!slotCache || force) slotCache = await db.list('slots'); return slotCache; }
+async function demandMap(district) {
+  const [vs, sl] = await Promise.all([approvedVendors(), allSlots()]);
+  const ids = new Set(vs.filter((v) => isVenue(v) && !unclaimed(v) && (!district || v.district === district)).map((v) => v.id));
+  const cap = Math.max(1, ids.size * 2); const m = {};
+  sl.forEach((s) => { if (ids.has(s.venueId)) m[s.date] = (m[s.date] || 0) + 1; });
+  Object.keys(m).forEach((k) => { m[k] /= cap; });
+  return m;
+}
+const takenFor = (sl, venueId, date) => sl.filter((s) => s.venueId === venueId && s.date === date).map((s) => s.half);
+
+// "Tell me when this date frees up"
+const alertList = () => LS.get('hh_alerts', []);
+function addAlert(a) { const l = alertList().filter((x) => !(x.venueId === a.venueId && x.date === a.date && x.slot === a.slot)); l.push(a); LS.set('hh_alerts', l); }
+function dropAlert(i) { const l = alertList(); l.splice(i, 1); LS.set('hh_alerts', l); }
+async function freedAlerts() {
+  const l = alertList(); if (!l.length) return [];
+  const sl = await allSlots(true);
+  return l.map((a, i) => ({ ...a, i })).filter((a) => a.date >= today() && slotFree(takenFor(sl, a.venueId, a.date), a.slot));
+}
+
+async function planB(v, date, slot, limit = 3) {
+  const [vs, sl] = await Promise.all([approvedVendors(), allSlots()]);
+  return vs.filter((x) => x.id !== v.id && isVenue(x) && !unclaimed(x) && x.district === v.district && (x.seating || 0) >= (v.seating || 0) * 0.6 && slotFree(takenFor(sl, x.id, date), slot))
+    .sort((a, b) => b.rating - a.rating).slice(0, limit);
+}
+
+function compareBar() {
+  const n = compareList().length;
+  const h = location.hash.split('?')[0] || '#/';
+  if (!n || ['vendor', 'admin'].includes(role()) || !(h === '#/' || h === '#/explore' || h.startsWith('#/v/'))) return '';
+  return `<a class="compare-bar" href="#/compare-venues"><span>${n} hall${n > 1 ? 's' : ''} to compare</span><b>Compare</b></a>`;
+}
+
+// ---------- Plan my event ----------
+async function viewPlan(params) {
+  const p = Object.fromEntries(params); const prefs = planPrefs();
+  const f = { type: p.type || prefs.type || 'Wedding', district: p.district ?? prefs.district ?? '', guests: p.guests || prefs.guests || '', budget: p.budget || prefs.budget || '', date: p.date || prefs.date || '', flex: p.flex || prefs.flex || '3', slot: p.slot || prefs.slot || 'full', plate: p.plate || prefs.plate || '400' };
+  let results = '';
+  if (p.date) {
+    LS.set('hh_plan', f);
+    const [vs, sl, demand] = await Promise.all([approvedVendors(), allSlots(true), demandMap(f.district)]);
+    const n = Number(f.flex); const base = new Date(f.date);
+    const dates = Array.from({ length: n * 2 + 1 }, (_, i) => new Date(base.getTime() + (i - n) * 86400000).toISOString().slice(0, 10)).filter((d) => d >= today());
+    const venues = vs.filter((v) => isVenue(v) && !unclaimed(v) && (!f.district || v.district === f.district) && (!f.guests || (v.seating || 0) >= Number(f.guests)) && v.slotPrices?.[f.slot])
+      .map((v) => ({ v, est: estimate(v, { guests: Number(f.guests) || 0, slot: f.slot, perPlate: f.plate }), free: dates.map((d) => slotFree(takenFor(sl, v.id, d), f.slot)) }))
+      .filter((x) => x.free.some(Boolean)).sort((a, b) => a.est.total - b.est.total);
+    const budget = Number(f.budget) || 0;
+    const head = dates.map((d) => { const dm = demand[d] || 0; return `<th class="${d === f.date ? 'pick' : ''}"><span>${new Date(d).toLocaleDateString('en-IN', { weekday: 'short' })}</span>${new Date(d).getDate()}${dm >= 0.3 ? '<i class="hot" title="Busy date"></i>' : ''}</th>`; }).join('');
+    results = `<div class="card stack"><div class="row between wrap-x"><h3 style="margin:0">${venues.length} hall${venues.length === 1 ? '' : 's'} with free dates</h3><span class="small muted">Cheapest total first · tap a ✓ to request that date</span></div>
+      ${venues.length ? `<div class="cmp-wrap"><table class="matrix"><tr><th class="vcol">Hall</th>${head}</tr>
+        ${venues.map(({ v, est, free }) => `<tr><td class="vcol"><a href="#/v/${v.id}"><b>${esc(v.businessName)}</b></a><div class="small muted">${esc(v.town)} · seats ${v.seating}</div><div class="small"><b>${money(est.total)}</b> est. total${budget ? (est.total <= budget ? ' <span class="badge ok">In budget</span>' : ' <span class="badge warn">Over budget</span>') : ''}</div></td>
+          ${free.map((ok, i) => `<td>${ok ? `<a class="cell ok" href="#/enquire/${v.id}?date=${dates[i]}&slot=${f.slot}" aria-label="Request ${dates[i]}">✓</a>` : '<span class="cell no">✕</span>'}</td>`).join('')}</tr>`).join('')}</table></div>`
+        : '<p class="muted small" style="margin:0">No halls match. Try more flexible dates, another district or fewer guests.</p>'}
+      <p class="small muted" style="margin:0">Estimated total = hall rent for the slot + food for your guests at ₹${esc(f.plate)} a plate + cleaning, generator and GST on rent where the hall lists them.</p></div>`;
+  }
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px"><h1 style="margin:0">Plan my event</h1><p class="muted" style="margin:0">Tell us the basics. We'll show every hall that fits, which nearby dates are free, and what it will really cost.</p>
+      <form id="planF" class="card form-grid">
+        <div><label>Event</label><select name="type">${EVENT_TYPES.map((x) => `<option ${x === f.type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div><label>District</label><select name="district"><option value="">Any district</option>${DISTRICTS.map((d) => `<option value="${d.id}" ${d.id === f.district ? 'selected' : ''}>${nameOf(d)}</option>`).join('')}</select></div>
+        <div><label>Guests</label><input type="number" name="guests" min="1" required value="${esc(f.guests)}" placeholder="500"></div>
+        <div><label>Total budget (₹, optional)</label><input type="number" name="budget" min="0" value="${esc(f.budget)}"></div>
+        <div><label>Preferred date</label><input type="date" name="date" required min="${today()}" value="${esc(f.date)}"></div>
+        <div><label>How flexible?</label><select name="flex">${[['0', 'Only this date'], ['3', '3 days either side'], ['7', 'A week either side']].map(([v2, l]) => `<option value="${v2}" ${v2 === f.flex ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div><label>Slot</label><select name="slot">${SLOTS.map((x) => `<option value="${x.id}" ${x.id === f.slot ? 'selected' : ''}>${nameOf(x)} · ${x.time}</option>`).join('')}</select></div>
+        <div><label>Food per plate (₹)</label><input type="number" name="plate" min="0" value="${esc(f.plate)}"></div>
+        <div class="full"><button class="btn block">Find halls and dates</button></div>
+      </form>${results}</div>`,
+    mount() { $('#planF').onsubmit = (e) => { e.preventDefault(); go('#/plan?' + new URLSearchParams(formData(e.target)).toString()); }; },
+  };
+}
+
+// ---------- Compare halls ----------
+async function viewCompareVenues() {
+  const ids = compareList();
+  const vs = (await Promise.all(ids.map((id) => db.get('vendors', id)))).filter(Boolean);
+  const pr = planPrefs(); const guests = Number(pr.guests) || 500; const slot = pr.slot || 'full'; const date = pr.date || '';
+  const sl = date ? await allSlots(true) : [];
+  if (!vs.length) return { html: `<div class="wrap empty"><h2>Nothing to compare yet</h2><p>Open a hall and tap “Compare” to add up to three.</p><a class="btn" href="#/explore">Browse halls</a></div>` };
+  const ests = vs.map((v) => estimate(v, { guests, slot, perPlate: pr.plate }));
+  const best = Math.min(...ests.map((e) => e.total));
+  const row = (label, fn) => `<tr><td>${label}</td>${vs.map((v, i) => `<td>${fn(v, i)}</td>`).join('')}</tr>`;
+  const link = (v) => `${location.origin}${location.pathname}#/v/${v.id}`;
+  const text = `Halls I'm considering for our ${pr.type || 'event'}${date ? ' on ' + fmtDate(date) : ''} (${guests} guests):\n\n` + vs.map((v, i) => `${i + 1}. ${v.businessName}, ${v.town}\nSeats ${v.seating} · ${slotName(slot)} rent ${money(v.slotPrices?.[slot])} · est. total ${money(ests[i].total)}\n${link(v)}`).join('\n\n') + '\n\nWhich one do you like?';
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px"><div class="row between wrap-x"><h1 style="margin:0">Compare halls</h1><a class="btn sm green" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Ask family on WhatsApp</a></div>
+      <p class="small muted" style="margin:0">Estimates for ${guests} guests, ${esc(slotLabel(slot))}${date ? `, ${fmtDate(date)}` : ''}. <a href="#/plan">Change</a></p>
+      <div class="card cmp-wrap"><table class="cmp compare"><tr><th></th>${vs.map((v) => `<th><a href="#/v/${v.id}">${esc(v.businessName)}</a><div class="small muted" style="font-weight:400">${esc(v.town)}</div></th>`).join('')}</tr>
+        ${date ? row('Free on your date', (v) => (slotFree(takenFor(sl, v.id, date), slot) ? '<span class="badge ok">Free</span>' : '<span class="badge bad">Booked</span>')) : ''}
+        ${row('Estimated total', (v, i) => `<b>${money(ests[i].total)}</b>${ests[i].total === best && vs.length > 1 ? ' <span class="badge ok">Lowest</span>' : ''}<div class="small muted">${money(ests[i].perGuest)} per guest</div>`)}
+        ${row('Hall rent', (v) => money(v.slotPrices?.[slot]))}
+        ${row('Food per plate', (v, i) => (v.charges?.perPlate ? money(v.charges.perPlate) + ' in-house' : money(ests[i].plate) + ' (your caterer)'))}
+        ${row('Seating / dining', (v) => `${v.seating} / ${v.dining}`)}
+        ${row('Parking', (v) => `${v.parking} cars`)}
+        ${row('AC', (v) => esc(v.ac))}
+        ${row('Catering', (v) => esc(v.catering))}
+        ${row('Extra charges', (v) => `${v.charges?.cleaning ? 'Cleaning ' + money(v.charges.cleaning) + '<br>' : ''}${v.charges?.generator ? 'Generator ' + money(v.charges.generator) + '<br>' : ''}${v.charges?.electricityPerHour ? 'Overtime ' + money(v.charges.electricityPerHour) + '/hr' : ''}` || '—')}
+        ${row('Cancellation', (v) => `${cancelBadge(v)}<div class="small muted">${esc(cancelText(v))}</div>`)}
+        ${row('Rating', (v) => (v.reviewCount ? `★ ${v.rating} (${v.reviewCount})` : 'New'))}
+        ${row('', (v) => `<button class="btn sm ghost" data-rm="${v.id}">Remove</button>`)}
+      </table></div></div>`,
+    mount() { $('#view').onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { toggleCompare(b.dataset.rm); render(); } }; },
+  };
+}
+
+// ---------- Digital invitation with the exact map pin ----------
+async function viewInvite(eventId) {
+  if (!S.user) return { html: needLogin() };
+  const ev = await db.get('events', eventId);
+  if (!ev || ev.ownerId !== S.user.uid) return { html: '<div class="wrap empty">Event not found.</div>' };
+  const es = (await db.list('enquiries', ['customerId', S.user.uid])).filter((e) => e.eventId === eventId && e.isVenue);
+  const booked = es.find((e) => e.status === 'confirmed') || es[0];
+  const v = booked ? await db.get('vendors', booked.vendorId) : null;
+  const saved = LS.get('hh_invite_' + eventId, {});
+  const d = { title: saved.title || (ev.type === 'Wedding' ? 'Wedding of\nName & Name' : ev.name), host: saved.host || S.profile.name || '', time: saved.time || (booked?.slot === 'evening' ? '5:00 pm' : '11:00 am'), note: saved.note || 'We request the pleasure of your company.' };
+  const venueName = v ? v.businessName : (ev.venue || 'Venue');
+  const place = v ? `${v.businessName}, ${v.address || v.town}` : (ev.venue || '');
+  const map = v?.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
+  const date = booked?.date || ev.date;
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px"><a href="#/events" class="small no-print">← ${t('events')}</a><h1 class="no-print" style="margin:0">Invitation</h1>
+      <form id="invF" class="card form-grid no-print">
+        <div class="full"><label>Title (use a new line for names)</label><textarea name="title" style="min-height:64px">${esc(d.title)}</textarea></div>
+        <div><label>Invited by</label><input name="host" value="${esc(d.host)}"></div><div><label>Time</label><input name="time" value="${esc(d.time)}"></div>
+        <div class="full"><label>Message</label><input name="note" value="${esc(d.note)}"></div>
+      </form>
+      <div class="invite" id="inv"></div>
+      <div class="row wrap-x no-print"><a class="btn green" id="invWa" target="_blank" rel="noopener">Share on WhatsApp</a><button class="btn ghost" data-act="print">Print / Save PDF</button></div>
+      <p class="small muted no-print">The map link opens the venue's exact location${v?.mapsUrl ? ' on Google Maps' : ''}, so guests don't end up at the wrong place.</p></div>`,
+    mount() {
+      const f = $('#invF');
+      const draw = () => {
+        const x = formData(f); LS.set('hh_invite_' + eventId, x);
+        $('#inv').innerHTML = `<div class="inv-card"><p class="inv-note">${esc(x.note)}</p><h2>${esc(x.title).replace(/\n/g, '<br>')}</h2>
+          <div class="inv-when"><b>${new Date(date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</b><span>${esc(x.time)}</span></div>
+          <div class="inv-where"><b>${esc(venueName)}</b><span>${esc(v?.address || ev.venue || '')}</span></div>
+          <a class="btn sm ghost" target="_blank" rel="noopener" href="${map}">Open location in maps</a>${x.host ? `<p class="small muted">With best compliments from ${esc(x.host)}</p>` : ''}</div>`;
+        const text = `${x.note}\n\n${x.title.replace(/\n/g, ' ')}\n${fmtDate(date)}, ${x.time}\n${place}\n\nLocation: ${map}${x.host ? `\n\n— ${x.host}` : ''}`;
+        $('#invWa').href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      };
+      f.oninput = draw; draw();
+      $('#view').onclick = (e) => { if (e.target.closest('[data-act=print]')) window.print(); };
+    },
+  };
 }
 
 // =====================================================================
@@ -1176,6 +1402,9 @@ async function route() {
     case 'bookings': return viewBookings();
     case 'events': return viewEvents();
     case 'compare': return viewCompare(parts[1]);
+    case 'compare-venues': return viewCompareVenues();
+    case 'plan': return viewPlan(params);
+    case 'invite': return viewInvite(parts[1]);
     case 'login': return viewLogin(params);
     case 'profile': return viewProfile();
     case 'vendor':

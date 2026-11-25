@@ -79,6 +79,7 @@ export const AMENITIES = ['Stage', 'Bridal room', 'Groom room', 'Dining hall', '
 export const EVENT_TYPES = ['Wedding', 'Engagement', 'Reception', 'Birthday', 'Housewarming', 'Corporate Event', 'Conference', 'Other'];
 export const TRADITIONS = ['Hindu', 'Muslim', 'Christian', 'Traditional Kerala', 'Destination', 'Interfaith', 'Not specified'];
 
+const localISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 export const catById = (id) => CATEGORIES.find((x) => x.id === id);
 export const districtById = (id) => DISTRICTS.find((x) => x.id === id);
 
@@ -159,6 +160,8 @@ export function buildSeedVendors() {
       seating, dining, parking, rooms: 2 + (i % 4), ac: AC_TYPES[ac], catering: CATERING_RULES[catering], amenities: am,
       slotPrices: { morning: m, evening: e, full: f }, startingPrice: Math.min(m, e), priceUnit: ' per slot',
       rating, reviewCount: reviews, featured, offer: i % 6 === 0 ? 'Weekday bookings 15% off' : '',
+      charges: { electricityPerHour: [800, 1200, 1500, 2000][i % 4], cleaning: [0, 2500, 4000, 6000][i % 4], generator: [0, 3000, 5000][i % 3], gstPct: 18, perPlate: catering === 0 ? 0 : [380, 420, 480, 550][i % 4] },
+      cancel: [{ freeDays: 90, refundPct: 100 }, { freeDays: 60, refundPct: 75 }, { freeDays: 30, refundPct: 50 }, { freeDays: 0, refundPct: 0 }][i % 4],
     };
   });
   const services = SERVICES.map(([name, cat, district, town, price, unit, rating, reviews], j) => {
@@ -181,7 +184,7 @@ export function buildSeedBookings() {
   const out = []; const d0 = new Date();
   [['demo_vendor', 3, 'morning'], ['demo_vendor', 3, 'evening'], ['demo_vendor', 10, 'morning'], ['demo_vendor', 17, 'evening'],
     ['demo_v12', 5, 'morning'], ['demo_v15', 6, 'morning'], ['demo_v15', 6, 'evening'], ['demo_v20', 8, 'evening']].forEach(([v, days, slot]) => {
-    const d = new Date(d0.getTime() + days * 86400000).toISOString().slice(0, 10);
+    const d = localISO(new Date(d0.getTime() + days * 86400000));
     out.push({ id: `${v}_${d}_${slot}`, venueId: v, date: d, half: slot, source: 'manual', note: 'Offline booking (demo)' });
   });
   return out;
@@ -249,12 +252,12 @@ export function buildSeedRegister() {
   const d0 = new Date();
   const offsets = [-150, -138, -121, -110, -95, -88, -72, -60, -47, -33, -21, -9, 12, 19, 33, 41];
   offsets.forEach((off, i) => {
-    const d = new Date(d0.getTime() + off * 86400000).toISOString().slice(0, 10);
+    const d = localISO(new Date(d0.getTime() + off * 86400000));
     const slot = ['full', 'morning', 'evening'][i % 3];
     const rent = prices[slot]; const extras = i % 4 === 0 ? 8000 : 0;
     const past = off < 0;
     const adv = Math.round(rent * 0.25);
-    const payments = [{ amount: adv, date: new Date(d0.getTime() + (off - 45) * 86400000).toISOString().slice(0, 10), mode: i % 2 ? 'UPI' : 'Cash', note: 'Advance' }];
+    const payments = [{ amount: adv, date: localISO(new Date(d0.getTime() + (off - 45) * 86400000)), mode: i % 2 ? 'UPI' : 'Cash', note: 'Advance' }];
     if (past && i !== 9) payments.push({ amount: rent + extras - adv, date: d, mode: i % 3 ? 'Cash' : 'Bank transfer', note: 'Balance' });
     const id = `reg_demo_${i}`;
     register.push({ id, venueId: 'demo_vendor', ownerId: 'demo_vendor', date: d, slot, customerName: names[i % names.length], customerPhone: '9' + String(800000000 + i * 1234567).slice(0, 9),
