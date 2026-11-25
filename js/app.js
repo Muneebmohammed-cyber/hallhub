@@ -2,6 +2,8 @@ import { db, auth } from './store.js';
 import { DEMO_MODE } from './config.js';
 import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, buildRealHalls, CORRIDORS, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
 import { t, getLang, setLang, nameOf } from './i18n.js';
+import { coverURL, icon } from './art.js';
+const NAV_ICON = { home: 'home', explore: 'search', events: 'events', bookings: 'bookings', profile: 'profile', dashboard: 'dashboard', enquiries: 'enquiries', calendar: 'calendar', services: 'services', venue: 'venue', venues: 'venues', Customers: 'customers' };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -68,14 +70,13 @@ function shell(inner) {
     </div>
   </div></header>
   <main id="view">${inner}</main>
-  <nav class="bottomnav">${nav.map(([h, k, ic]) => `<a href="${h}" class="${active(h) ? 'on' : ''}"><span class="ic">${ic}</span>${t(k)}</a>`).join('')}</nav>`;
+  <nav class="bottomnav">${nav.map(([h, k, ic]) => `<a href="${h}" class="${active(h) ? 'on' : ''}"><span class="ic">${icon(NAV_ICON[k] || 'home')}</span>${t(k)}</a>`).join('')}</nav>`;
 }
 
 // ---------- shared components ----------
 function coverStyle(v) {
   if (v.portfolio?.[0]) return `background-image:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.45)),url('${v.portfolio[0]}')`;
-  const [a, b] = v.palette || ['#6e1a26', '#b8914a'];
-  return `background:linear-gradient(135deg,${a},${b})`;
+  return `background-image:${coverURL(v)}`;
 }
 // ---------- slots & calendar ----------
 const slotName = (id) => { const x = slotById(id); return x ? nameOf(x) : id; };
@@ -150,9 +151,9 @@ async function approvedVendors(force) {
 // CUSTOMER VIEWS
 // =====================================================================
 const DESTINATIONS = [
-  ['Kumarakom backwaters', 'ktm', '#2f4a3a', '#7aa58a'], ['Munnar hills', 'idk', '#3d5a40', '#a8c09a'],
-  ['Alappuzha houseboats', 'alp', '#1f4a5a', '#77a9b3'], ['Kovalam beach', 'tvm', '#5b3a1d', '#d9a86c'],
-  ['Bekal fort', 'ksd', '#5b1520', '#c9a35b'], ['Wayanad forests', 'wyd', '#2a3b22', '#8fae6b'],
+  ['Kumarakom backwaters', 'ktm', '', '', 'backwater'], ['Munnar hills', 'idk', '', '', 'resort'],
+  ['Alappuzha houseboats', 'alp', '', '', 'houseboat'], ['Kovalam beach', 'tvm', '', '', 'resort'],
+  ['Bekal fort', 'ksd', '', '', 'convention'], ['Wayanad forests', 'wyd', '', '', 'resort'],
 ];
 
 async function viewHome() {
@@ -166,8 +167,8 @@ async function viewHome() {
   const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
     html: `
-    <section class="hero"><div class="wrap">
-      <p style="letter-spacing:2px;font-size:.75rem;text-transform:uppercase;margin-bottom:6px">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'Kerala · Auditoriums & Halls'}</p>
+    <section class="hero" style="background-image:${coverURL({ id: 'hero-hallhub-7', category: 'auditorium' })}"><div class="wrap">
+      <p class="lede-top">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'From Kasaragod to Thiruvananthapuram'}</p>
       <h1>${t('tagline')}</h1>
       <p>See which halls are free on your date — morning, evening or full day — across all 14 districts.</p>
       <form class="search" id="homeSearch">
@@ -181,7 +182,7 @@ async function viewHome() {
     <div class="wrap">
       <section class="section">
         <div class="section-head"><h2>${t('venues')}</h2></div>
-        <div class="cat-grid">${types.map((c) => `<a class="cat" href="#/explore?cat=${c.id}"><span class="ic">${c.icon}</span>${esc(c.en)}</a>`).join('')}</div>
+        <div class="cat-grid">${types.map((c) => `<a class="cat" href="#/explore?cat=${c.id}" style="background-image:${coverURL({ id: 'cat-' + c.id, category: c.id })}">${esc(c.en)}</a>`).join('')}</div>
       </section>
       ${corridor.length ? `<section class="section"><div class="section-head"><h2>Chavakkad – Ponnani highway</h2><a href="#/explore?corridor=chavakkad-ponnani">${t('viewAll')} (${corridor.length})</a></div>
         <p class="small muted" style="margin:-4px 0 10px">Real auditoriums along NH66 and the Guruvayur–Ponnani road, from Blangad to Ponnani.</p>
@@ -189,7 +190,7 @@ async function viewHome() {
       <section class="section"><div class="section-head"><h2>${t('featured')}</h2><a href="#/explore?sort=popular">${t('viewAll')}</a></div>
         <div class="grid">${featured.map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('destinations')}</h2></div>
-        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${DESTINATIONS.map(([n, d, a, b]) => `<a class="dest" href="#/explore?district=${d}" style="background:linear-gradient(160deg,${a},${b})"><b>${n}</b><span class="small">${distName(d)}</span></a>`).join('')}</div></section>
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${DESTINATIONS.map(([n, d, a, b, kind]) => `<a class="dest" href="#/explore?district=${d}" style="background-image:${coverURL({ id: 'dest-' + n, category: kind })}"><b>${n}</b><span class="small">${distName(d)}</span></a>`).join('')}</div></section>
       ${offers.length ? `<section class="section"><div class="section-head"><h2>Special offers</h2></div><div class="grid">${offers.map((v) => vendorCard(v)).join('')}</div></section>` : ''}
       <section class="section"><div class="section-head"><h2>${t('recent')}</h2></div><div class="grid">${recent.map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('addons')}</h2><a href="#/explore?kind=services">${t('viewAll')}</a></div>
@@ -243,7 +244,7 @@ async function viewExplore(params) {
   const card = (v) => vendorCard(v, p.date && isVenue(v) ? { ok: slotFree(venueTaken(v.id), slot), label: `${fmtDate(p.date)} · ${slotName(slot)} · ${money(priceOf(v))}` } : null);
   return {
     html: `<div class="wrap" style="padding-top:16px">
-      <div class="tabs"><a class="chip ${services ? '' : 'on'}" href="#/explore">🏛️ ${t('venues')}</a><a class="chip ${services ? 'on' : ''}" href="#/explore?kind=services">✨ Other services</a></div>
+      <div class="tabs"><a class="chip ${services ? '' : 'on'}" href="#/explore">${t('venues')}</a><a class="chip ${services ? 'on' : ''}" href="#/explore?kind=services">Other services</a></div>
       <h1>${p.corridor ? esc(CORRIDORS[p.corridor]) : p.cat ? esc(catName(p.cat)) : services ? 'Event services' : 'Auditoriums & halls'}</h1>
       <form id="flt" class="filters">
         ${services ? '<input type="hidden" name="kind" value="services">' : ''}${p.corridor ? `<input type="hidden" name="corridor" value="${esc(p.corridor)}">` : ''}
@@ -279,7 +280,7 @@ async function viewVendor(id) {
   if (!v || (v.status !== 'approved' && role() !== 'admin' && S.user?.uid !== v.ownerId)) return { html: `<div class="wrap empty">Vendor not found.</div>` };
   if (unclaimed(v)) {
     return {
-      html: `<div class="cover" style="height:180px;${coverStyle(v)}"><div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '🏛️'}</div><div class="row wrap-x"><span class="badge">📍 Not on HallHub yet</span></div></div>
+      html: `<div class="cover venue-hero" style="${coverStyle(v)}"><div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '🏛️'}</div><div class="row wrap-x"><span class="badge">📍 Not on HallHub yet</span></div></div>
       <div class="wrap stack" style="padding-top:16px">
         <div><h1 style="margin:0">${esc(v.businessName)}</h1><div class="muted">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}</div></div>
         <div class="card stack"><p style="margin:0">${esc(v.description)}</p>
@@ -301,7 +302,7 @@ async function viewVendor(id) {
   const wa = v.whatsapp ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Hi ${v.businessName}, I found you on HallHub and would like to enquire about your services.`)}` : '';
   return {
     html: `
-    <div class="cover" style="height:220px;${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '✨'}</div>`}
+    <div class="cover venue-hero" style="${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '✨'}</div>`}
       <div class="row wrap-x">${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : '<span class="badge warn">Not yet verified</span>'}${v.isDemo ? '<span class="badge demo">Demo data</span>' : ''}${v.status !== 'approved' ? `<span class="badge bad">${esc(v.status)}</span>` : ''}</div></div>
     <div class="wrap stack" style="padding-top:16px">
       <div class="row between" style="align-items:flex-start">
