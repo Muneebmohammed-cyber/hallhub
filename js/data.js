@@ -8,9 +8,9 @@ export const DISTRICTS = [
   { id: 'ktm', en: 'Kottayam', ml: 'കോട്ടയം', towns: ['Kottayam', 'Changanassery', 'Pala', 'Ettumanoor', 'Kumarakom', 'Vaikom'] },
   { id: 'idk', en: 'Idukki', ml: 'ഇടുക്കി', towns: ['Thodupuzha', 'Munnar', 'Kattappana', 'Adimali', 'Kumily'] },
   { id: 'ekm', en: 'Ernakulam', ml: 'എറണാകുളം', towns: ['Kochi', 'Aluva', 'Kakkanad', 'Perumbavoor', 'Muvattupuzha', 'Angamaly', 'Fort Kochi'] },
-  { id: 'tsr', en: 'Thrissur', ml: 'തൃശ്ശൂർ', towns: ['Thrissur', 'Guruvayur', 'Chalakudy', 'Kodungallur', 'Irinjalakuda', 'Kunnamkulam'] },
+  { id: 'tsr', en: 'Thrissur', ml: 'തൃശ്ശൂർ', towns: ['Thrissur', 'Guruvayur', 'Chavakkad', 'Blangad', 'Edakkazhiyur', 'Vadakkekad', 'Punnayur', 'Punnayurkulam', 'Andathode', 'Chalakudy', 'Kodungallur', 'Irinjalakuda', 'Kunnamkulam'] },
   { id: 'pkd', en: 'Palakkad', ml: 'പാലക്കാട്', towns: ['Palakkad', 'Ottapalam', 'Shoranur', 'Mannarkkad', 'Chittur', 'Pattambi'] },
-  { id: 'mlp', en: 'Malappuram', ml: 'മലപ്പുറം', towns: ['Malappuram', 'Manjeri', 'Tirur', 'Perinthalmanna', 'Kottakkal', 'Nilambur', 'Ponnani'] },
+  { id: 'mlp', en: 'Malappuram', ml: 'മലപ്പുറം', towns: ['Malappuram', 'Manjeri', 'Tirur', 'Perinthalmanna', 'Kottakkal', 'Nilambur', 'Ponnani', 'Perumbadappu', 'Ayiroor', 'Veliancode', 'Eramangalam', 'Maranchery', 'Athani'] },
   { id: 'kkd', en: 'Kozhikode', ml: 'കോഴിക്കോട്', towns: ['Kozhikode', 'Vadakara', 'Koyilandy', 'Feroke', 'Thamarassery'] },
   { id: 'wyd', en: 'Wayanad', ml: 'വയനാട്', towns: ['Kalpetta', 'Sulthan Bathery', 'Mananthavady', 'Vythiri'] },
   { id: 'knr', en: 'Kannur', ml: 'കണ്ണൂർ', towns: ['Kannur', 'Thalassery', 'Payyanur', 'Taliparamba', 'Mattannur'] },
@@ -185,6 +185,53 @@ export function buildSeedBookings() {
     out.push({ id: `${v}_${d}_${slot}`, venueId: v, date: d, half: slot, source: 'manual', note: 'Offline booking (demo)' });
   });
   return out;
+}
+
+// ---------------- Real halls: Chavakkad → Ponnani (NH66 / Guruvayur–Ponnani road) ----------------
+// Unclaimed listings: only name, type, locality and the Google Maps place ID (which may be stored).
+// Capacity, prices and availability are added by the owner after claiming the listing.
+// [name, type, district, town, locality, placeId]
+const REAL_HALLS = [
+  ['Royal Auditorium', 'auditorium', 'tsr', 'Blangad', 'Blangad, Chavakkad', 'ChIJSzW7Ro2TpzsR7k0gm--c-7I'],
+  ['Bismi Auditorium', 'auditorium', 'tsr', 'Blangad', 'Blangad, Chavakkad', 'ChIJq6qqVfaTpzsRAh63M8tCM5E'],
+  ['Grande Convention Centre', 'convention', 'tsr', 'Chavakkad', 'Chavakkad–Kanjani Rd, Palayoor, Chavakkad', 'ChIJj03icgCVpzsRnqpDqZ1iWWc'],
+  ['Thatha Mini Conference Hall', 'community-hall', 'tsr', 'Chavakkad', 'Chavakkad', 'ChIJLdtTobKVpzsR3QEzVBddgiE'],
+  ['Aurora Castle', 'auditorium', 'tsr', 'Edakkazhiyur', 'NH 66, Nallamkallu, Edakkazhiyur', 'ChIJH0ZUOQCVpzsRBlZ23TJ6Xzs'],
+  ['Rahmath Community Hall', 'community-hall', 'tsr', 'Punnayur', 'Akalad, Moonnaini, Punnayur', 'ChIJfZIuUw6WpzsRmPmuOt2JH68'],
+  ['KP Namboodiri’s Auditorium', 'auditorium', 'tsr', 'Vadakkekad', 'Guruvayur–Ponnani Rd (SH62), Manikanteswaram, Vadakkekad', 'ChIJ-b421_GVpzsRzPa7QtkP7V4'],
+  ['V. P. Mamu Community Hall', 'community-hall', 'tsr', 'Andathode', 'Andathode', 'ChIJI9wdBAC9pzsRiNvWMoQ4ZHw'],
+  ['Mukkandath Auditorium', 'auditorium', 'tsr', 'Punnayurkulam', 'Guruvayur–Ponnani Rd, Punnayurkulam', 'ChIJj_5BSN69pzsRjd0Rkp9wJ_Q'],
+  ['Royal Palace Auditorium', 'auditorium', 'mlp', 'Perumbadappu', 'Guruvayur–Ponnani Rd, Perumbadappu', 'ChIJIY5Kqda9pzsRBeakWTfxnPk'],
+  ['Pleasant Palace Auditorium', 'convention', 'mlp', 'Ayiroor', 'Ayiroor, Perumbadappu', 'ChIJi5gJI7W9pzsRBy7eqh1LJGo'],
+  ['P V Regency', 'convention', 'mlp', 'Veliancode', 'Eramangalam–Veliancode Rd, Kothamukku, Veliancode', 'ChIJhY7jigi9pzsRRitKITViJlA'],
+  ['Mattery Convention Center', 'convention', 'mlp', 'Eramangalam', 'Guruvayur–Ponnani Rd, Eramangalam', 'ChIJpRiCGha9pzsRT3pGCwPsk68'],
+  ['Al Tamam Convention Centre', 'convention', 'mlp', 'Veliancode', 'Veliancode', 'ChIJH-Obb8y9pzsRtIt0gDGPp-A'],
+  ['Kairali Auditorium', 'auditorium', 'mlp', 'Veliancode', 'Kundukadavu–Veliancode Rd, Pazhanji', 'ChIJh4TkcXu8pzsRrn0OQWpU88M'],
+  ['Palace Auditorium', 'convention', 'mlp', 'Maranchery', 'Maranchery', 'ChIJ8bwkSRS8pzsR2ef9GI2IEqU'],
+  ['Arunodayam Regency', 'auditorium', 'mlp', 'Maranchery', 'Guruvayur–Ponnani Rd, Maranchery', 'ChIJD-RQXwu8pzsRMmOWlu5Gppo'],
+  ['Mother Plaza Convention Center', 'convention', 'mlp', 'Athani', 'Naduvattom–Karinkallathani Rd, Athani, Ponnani', 'ChIJVaHKmZK7pzsRRnUDjc1_vvQ'],
+  ['Everest Atrium', 'auditorium', 'mlp', 'Ponnani', 'Kollanpadi, Ponnani', 'ChIJ37HqknK7pzsRUDflqNeeCuY'],
+  ['Akbar Auditorium', 'auditorium', 'mlp', 'Ponnani', 'Guruvayur–Ponnani Rd, Ponnani', 'ChIJM-FBq6m7pzsRQOw6WXMnlMs'],
+  ['SB Auditorium', 'community-hall', 'mlp', 'Ponnani', 'Ponnani', 'ChIJLWyVqIy7pzsRmpCnSGPVIIY'],
+  ['Vaheeda Convention Centre', 'convention', 'mlp', 'Ponnani', 'Chana Rd, Keezhillam, Ponnani', 'ChIJj6awfsK7pzsRw3u60n2ImSE'],
+  ['Maas Community Hall', 'convention', 'mlp', 'Ponnani', 'Keezhillam, Thrikkavu, Ponnani', 'ChIJiR90Uxq7pzsRZWqrbVQBTsQ'],
+];
+export const CORRIDORS = { 'chavakkad-ponnani': 'Chavakkad – Ponnani highway' };
+
+export function buildRealHalls() {
+  return REAL_HALLS.map(([name, category, district, town, locality, placeId], i) => {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return {
+      id: `real_${slug}`, ownerId: '', isDemo: false, isReal: true, claimed: false, corridor: 'chavakkad-ponnani',
+      businessName: name, category, district, town, address: `${locality}, ${districtById(district).en}, Kerala`,
+      placeId, mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+      description: `${name} is ${({ auditorium: 'an auditorium', convention: 'a convention centre', 'community-hall': 'a community hall' })[category]} in ${locality}. This hall hasn’t joined HallHub yet, so its capacity, rent and free dates aren’t listed. Contact the hall directly, or ask the owner to claim this listing.`,
+      seating: 0, dining: 0, parking: 0, rooms: 0, ac: '', catering: '', amenities: [], slotPrices: null,
+      startingPrice: 0, priceUnit: '', rating: 0, reviewCount: 0, serviceDistricts: [district], policies: '', traditions: [],
+      palette: PALETTES[(i + 3) % PALETTES.length], portfolio: [], status: 'approved', verified: false, featured: false,
+      views: 0, offer: '', createdAt: Date.now() - 86400000 * 40,
+    };
+  });
 }
 
 export const SEED_REVIEWS = [

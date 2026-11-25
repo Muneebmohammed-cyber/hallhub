@@ -13,6 +13,7 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
 - **Venue owner dashboard:** enquiries, revision requests, confirmed bookings, money booked this month, upcoming events, profile views. Venue editor for capacity, AC, catering, facilities, slot prices, offers and photos.
 - **Customers:** My Events with a countdown and money committed against budget, side-by-side quotation comparison, saved venues, bookings list.
 - **Admin:** stats, verification queue, verify, feature or suspend listings, customers, all enquiries, duplicate-phone check, load or hide demo data.
+- **Real halls, Chavakkad – Ponnani highway:** 23 real auditoriums and halls along NH66 and the Guruvayur–Ponnani road (Blangad, Chavakkad, Edakkazhiyur, Vadakkekad, Punnayur, Andathode, Punnayurkulam, Perumbadappu, Ayiroor, Veliancode, Eramangalam, Maranchery, Athani, Ponnani). They're stored as **unclaimed listings** with only the name, type, locality and Google Maps place ID (Google's terms allow keeping place IDs, but not ratings, reviews or phone numbers). Each one links to its Google Maps page. Owners tap **Claim this listing**, and admin confirms by phone and approves. The owner's full listing then replaces the unclaimed one. Unclaimed halls drop out of date searches (their availability is unknown), and a note shows how many were left out.
 - **Demo data:** 31 sample auditoriums and halls in all 14 districts plus 8 add-on services, all labelled **Demo**.
 
 Planned for Phase 2: Razorpay advance payment, in-app chat, reviews, booking cancellation and refunds, push and WhatsApp alerts.
@@ -29,7 +30,7 @@ While `js/config.js` has no `apiKey`, the app runs in **demo mode**: all data is
 4. Open the **Rules** tab, paste in everything from `firestore.rules`, and click **Publish**.
 5. **Project settings → Your apps → Web (</>)** → register the app → copy the `firebaseConfig` values into `js/config.js` and push.
 6. **Make yourself admin:** sign in once in the app, then in Firestore open `users/<your uid>` and change `role` to `admin`. Reload the app.
-7. In **Admin → Dashboard**, click **Load demo venues** to add the sample listings and a few booked slots.
+7. In **Admin → Dashboard**, click **Load demo venues** to add the sample listings and a few booked slots, and **Load real halls** to add the 23 Chavakkad – Ponnani halls.
 
 ## Images
 To stay on the free plan (Firebase Storage now needs the paid Blaze plan), images are compressed in the browser and saved inside Firestore documents: up to 6 photos per venue and 3 reference images per enquiry. When you move to Blaze, switch to Firebase Storage.

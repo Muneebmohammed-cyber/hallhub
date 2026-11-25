@@ -1,6 +1,6 @@
 import { db, auth } from './store.js';
 import { DEMO_MODE } from './config.js';
-import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
+import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, buildRealHalls, CORRIDORS, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
 import { t, getLang, setLang, nameOf } from './i18n.js';
 
 // ---------- helpers ----------
@@ -105,20 +105,21 @@ function venueFacts(v) {
   return `<div class="facts"><div><b>${(v.seating || 0).toLocaleString('en-IN')}</b><span>${t('seating')}</span></div><div><b>${(v.dining || 0).toLocaleString('en-IN')}</b><span>${t('dining')}</span></div><div><b>${v.parking || 0}</b><span>${t('parking')}</span></div></div>`;
 }
 
+const unclaimed = (v) => v?.isReal && !v.claimed;
 function vendorCard(v, avail) {
   const cat = catById(v.category);
   return `<a class="vcard" href="#/v/${v.id}">
     <div class="cover" style="${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph">${cat?.icon || '✨'}</div>`}
-      <div class="row wrap-x">${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.featured ? '<span class="badge gold">★ Featured</span>' : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}</div>
+      <div class="row wrap-x">${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.featured ? '<span class="badge gold">★ Featured</span>' : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}${unclaimed(v) ? '<span class="badge">📍 Not on HallHub yet</span>' : ''}</div>
     </div>
     <div class="vbody">
       <div class="vname">${esc(v.businessName)}</div>
       <div class="vmeta">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}</div>
-      ${isVenue(v) ? `${venueFacts(v)}<div class="small muted">${esc(v.ac || '')} · ${esc(v.catering || '')}</div>` : `<div class="small muted">${esc((v.description || '').slice(0, 90))}…</div>`}
+      ${unclaimed(v) ? `<div class="small muted">${esc(v.address)}</div><div class="small muted">Capacity, rent and free dates not listed yet</div>` : isVenue(v) ? `${venueFacts(v)}<div class="small muted">${esc(v.ac || '')} · ${esc(v.catering || '')}</div>` : `<div class="small muted">${esc((v.description || '').slice(0, 90))}…</div>`}
       ${avail ? `<div class="small" style="font-weight:700;color:${avail.ok ? 'var(--ok)' : 'var(--bad)'}">${avail.ok ? '✔ ' + t('available') : '✕ ' + t('booked')} · ${esc(avail.label)}</div>` : ''}
       <div class="row between" style="margin-top:auto;padding-top:6px">
-        <span class="small">${t('startingAt')} <span class="price">${money(v.startingPrice)}</span>${esc(v.priceUnit || '')}</span>
-        <span class="stars">★ ${Number(v.rating || 0).toFixed(1)} <span class="muted small">(${v.reviewCount || 0})</span></span>
+        ${v.startingPrice ? `<span class="small">${t('startingAt')} <span class="price">${money(v.startingPrice)}</span>${esc(v.priceUnit || '')}</span>` : '<span class="small muted">Price on request</span>'}
+        ${v.reviewCount ? `<span class="stars">★ ${Number(v.rating || 0).toFixed(1)} <span class="muted small">(${v.reviewCount})</span></span>` : ''}
       </div>
       ${v.offer ? `<div class="small" style="color:var(--ok);font-weight:600">🎁 ${esc(v.offer)}</div>` : ''}
     </div></a>`;
@@ -161,6 +162,7 @@ async function viewHome() {
   const recent = [...venues].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4);
   const offers = venues.filter((v) => v.offer).slice(0, 4);
   const services = vs.filter((v) => !isVenue(v)).slice(0, 8);
+  const corridor = vs.filter((v) => v.corridor === 'chavakkad-ponnani');
   const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
     html: `
@@ -181,6 +183,9 @@ async function viewHome() {
         <div class="section-head"><h2>${t('venues')}</h2></div>
         <div class="cat-grid">${types.map((c) => `<a class="cat" href="#/explore?cat=${c.id}"><span class="ic">${c.icon}</span>${esc(c.en)}</a>`).join('')}</div>
       </section>
+      ${corridor.length ? `<section class="section"><div class="section-head"><h2>Chavakkad – Ponnani highway</h2><a href="#/explore?corridor=chavakkad-ponnani">${t('viewAll')} (${corridor.length})</a></div>
+        <p class="small muted" style="margin:-4px 0 10px">Real auditoriums along NH66 and the Guruvayur–Ponnani road, from Blangad to Ponnani.</p>
+        <div class="grid">${corridor.slice(0, 4).map((v) => vendorCard(v)).join('')}</div></section>` : ''}
       <section class="section"><div class="section-head"><h2>${t('featured')}</h2><a href="#/explore?sort=popular">${t('viewAll')}</a></div>
         <div class="grid">${featured.map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('destinations')}</h2></div>
@@ -214,6 +219,9 @@ async function viewExplore(params) {
     if (services ? isVenue(v) : !isVenue(v)) return false;
     if (q && !(`${v.businessName} ${catName(v.category)} ${v.town} ${v.description}`.toLowerCase().includes(q))) return false;
     if (p.cat && v.category !== p.cat) return false;
+    if (p.corridor && v.corridor !== p.corridor) return false;
+    if (unclaimed(v) && (p.guests || p.ac || p.catering || p.parking || p.max || p.rating)) return false;
+    if (unclaimed(v) && p.date) return false;
     if (p.district && v.district !== p.district && !(v.serviceDistricts || []).includes(p.district)) return false;
     if (p.town && v.town !== p.town) return false;
     if (p.max && Number(v.startingPrice) > Number(p.max)) return false;
@@ -231,13 +239,14 @@ async function viewExplore(params) {
   const sorts = { popular: (a, b) => (b.reviewCount + b.views / 10) - (a.reviewCount + a.views / 10), price_asc: (a, b) => priceOf(a) - priceOf(b), price_desc: (a, b) => priceOf(b) - priceOf(a), rating: (a, b) => b.rating - a.rating, capacity: (a, b) => (b.seating || 0) - (a.seating || 0) };
   rows.sort(sorts[p.sort] || ((a, b) => (b.featured - a.featured) || (b.rating - a.rating)));
   const cats = CATEGORIES.filter((c) => (services ? c.group !== 'venues' : c.group === 'venues'));
+  const hiddenUnknown = p.date && !services ? vs.filter((v) => unclaimed(v) && (!p.district || v.district === p.district) && (!p.corridor || v.corridor === p.corridor) && (!p.town || v.town === p.town)).length : 0;
   const card = (v) => vendorCard(v, p.date && isVenue(v) ? { ok: slotFree(venueTaken(v.id), slot), label: `${fmtDate(p.date)} · ${slotName(slot)} · ${money(priceOf(v))}` } : null);
   return {
     html: `<div class="wrap" style="padding-top:16px">
       <div class="tabs"><a class="chip ${services ? '' : 'on'}" href="#/explore">🏛️ ${t('venues')}</a><a class="chip ${services ? 'on' : ''}" href="#/explore?kind=services">✨ Other services</a></div>
-      <h1>${p.cat ? esc(catName(p.cat)) : services ? 'Event services' : 'Auditoriums & halls'}</h1>
+      <h1>${p.corridor ? esc(CORRIDORS[p.corridor]) : p.cat ? esc(catName(p.cat)) : services ? 'Event services' : 'Auditoriums & halls'}</h1>
       <form id="flt" class="filters">
-        ${services ? '<input type="hidden" name="kind" value="services">' : ''}
+        ${services ? '<input type="hidden" name="kind" value="services">' : ''}${p.corridor ? `<input type="hidden" name="corridor" value="${esc(p.corridor)}">` : ''}
         <input name="q" placeholder="${t('searchPh')}" value="${esc(p.q || '')}" class="full">
         ${sel('cat', cats.map((c) => [c.id, c.en]), p.cat, services ? 'All services' : 'All venue types')}
         ${sel('district', DISTRICTS.map((d) => [d.id, nameOf(d)]), p.district, t('allDistricts'))}
@@ -255,6 +264,7 @@ async function viewExplore(params) {
       </form>
       <p class="muted small">${rows.length} ${services ? 'service' : 'venue'}${rows.length === 1 ? '' : 's'}${p.date && !services ? ` free on ${fmtDate(p.date)} · ${slotLabel(slot)}` : ''}</p>
       <div class="grid">${rows.map(card).join('') || `<div class="empty full">${t('noResults')}${p.date ? ' Try another date or slot.' : ''}</div>`}</div>
+      ${hiddenUnknown ? `<div class="card small muted" style="margin-top:14px">${hiddenUnknown} more hall${hiddenUnknown === 1 ? '' : 's'} in this area haven't joined HallHub yet, so their availability is unknown. <a href="#/explore?${new URLSearchParams(Object.entries(p).filter(([k]) => !['date', 'slot', 'guests'].includes(k))).toString()}">Show them</a></div>` : ''}
     </div>`,
     mount() {
       const f = $('#flt');
@@ -267,6 +277,22 @@ async function viewExplore(params) {
 async function viewVendor(id) {
   const v = await db.get('vendors', id);
   if (!v || (v.status !== 'approved' && role() !== 'admin' && S.user?.uid !== v.ownerId)) return { html: `<div class="wrap empty">Vendor not found.</div>` };
+  if (unclaimed(v)) {
+    return {
+      html: `<div class="cover" style="height:180px;${coverStyle(v)}"><div class="pattern"></div><div class="glyph" style="font-size:3.4rem">${catById(v.category)?.icon || '🏛️'}</div><div class="row wrap-x"><span class="badge">📍 Not on HallHub yet</span></div></div>
+      <div class="wrap stack" style="padding-top:16px">
+        <div><h1 style="margin:0">${esc(v.businessName)}</h1><div class="muted">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}</div></div>
+        <div class="card stack"><p style="margin:0">${esc(v.description)}</p>
+          <div class="row wrap-x"><a class="btn" target="_blank" rel="noopener" href="${esc(v.mapsUrl)}">Open in Google Maps</a><a class="btn ghost" href="#/explore?corridor=${esc(v.corridor || '')}&district=${v.district}">Similar halls nearby</a></div>
+          <p class="small muted" style="margin:0">Google Maps shows the hall's phone number, photos and reviews.</p></div>
+        <div class="card"><h3>Address</h3><p class="small" style="margin:0">${esc(v.address)}</p></div>
+        <div class="card stack" style="background:#fdf6e6;border-color:var(--gold-soft)"><h3 style="margin:0">Own or manage this hall?</h3>
+          <p class="small" style="margin:0">Claim it for free to add your capacity, rent per slot and photos, manage your booking calendar and get booking requests.</p>
+          <a class="btn gold" href="#/vendor/register?claim=${id}">Claim this listing</a></div>
+        ${role() === 'admin' ? `<p class="small muted">Place ID: ${esc(v.placeId)}</p>` : ''}
+      </div>`,
+    };
+  }
   if (S.user && S.user.uid !== v.ownerId) db.update('vendors', id, { views: (v.views || 0) + 1 }).catch(() => {});
   const fav = (S.profile?.favourites || []).includes(id);
   const venue = isVenue(v);
@@ -652,22 +678,25 @@ async function viewProfile() {
 // =====================================================================
 // VENDOR VIEWS
 // =====================================================================
-async function viewVendorRegister() {
+async function viewVendorRegister(params = new URLSearchParams()) {
   if (!S.user) return { html: needLogin() };
   if (S.vendor) { go('#/vendor'); return { html: '' }; }
   const p = S.profile;
+  const claimId = params.get('claim') || '';
+  const claim = claimId ? await db.get('vendors', claimId) : null;
   return {
     html: `<div class="wrap" style="padding-top:16px"><div class="card stack"><h2>List your venue or service</h2><p class="muted small" style="margin:0">Your listing goes live after our team verifies it. Verified listings get a badge. Hall owners add capacity and slot prices on the next screen.</p>
       <form id="vr" class="form-grid">
-        <div><label>Business name</label><input name="businessName" required></div>
+        ${claim ? `<div class="full msg">You're claiming <b>${esc(claim.businessName)}</b>, ${esc(claim.town)}. Our team will call you to confirm you own or manage it before the listing switches to your account.</div>` : ''}
+        <div><label>Business name</label><input name="businessName" required value="${esc(claim?.businessName || '')}"></div>
         <div><label>Owner name</label><input name="ownerName" required value="${esc(p.name)}"></div>
         <div><label>Mobile number</label><input name="phone" required value="${esc(p.phone)}"></div>
         <div><label>WhatsApp number (with 91)</label><input name="whatsapp" placeholder="9198XXXXXXXX"></div>
         <div><label>Email</label><input name="email" type="email" value="${esc(p.email || '')}"></div>
-        <div><label>Business category</label><select name="category" required>${CATEGORY_GROUPS.map((g) => `<optgroup label="${g.en}">${CATEGORIES.filter((c) => c.group === g.id).map((c) => `<option value="${c.id}">${esc(c.en)}</option>`).join('')}</optgroup>`).join('')}</select></div>
-        <div><label>District</label><select name="district" id="vrD" required>${DISTRICTS.map((d) => `<option value="${d.id}">${d.en}</option>`).join('')}</select></div>
+        <div><label>Business category</label><select name="category" required>${CATEGORY_GROUPS.map((g) => `<optgroup label="${g.en}">${CATEGORIES.filter((c) => c.group === g.id).map((c) => `<option value="${c.id}" ${claim?.category === c.id ? 'selected' : ''}>${esc(c.en)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+        <div><label>District</label><select name="district" id="vrD" required>${DISTRICTS.map((d) => `<option value="${d.id}" ${claim?.district === d.id ? 'selected' : ''}>${d.en}</option>`).join('')}</select></div>
         <div><label>Town</label><select name="town" id="vrT"></select></div>
-        <div class="full"><label>Business address</label><input name="address" required></div>
+        <div class="full"><label>Business address</label><input name="address" required value="${esc(claim?.address || '')}"></div>
         <div class="full"><label>Service districts</label><div class="row wrap-x">${DISTRICTS.map((d) => `<label class="chip" style="margin:0"><input type="checkbox" name="sd" value="${d.id}" style="width:auto"> ${d.en}</label>`).join('')}</div></div>
         <div><label>GST number (optional)</label><input name="gst"></div>
         <div><label>Business registration no. (optional)</label><input name="regNo"></div>
@@ -676,7 +705,7 @@ async function viewVendorRegister() {
         <div class="full"><button class="btn block" id="vrBtn">Submit for verification</button></div>
       </form></div></div>`,
     mount() {
-      const fillTowns = () => { $('#vrT').innerHTML = districtById($('#vrD').value).towns.map((x) => `<option>${x}</option>`).join(''); };
+      const fillTowns = () => { $('#vrT').innerHTML = districtById($('#vrD').value).towns.map((x) => `<option ${claim?.town === x ? 'selected' : ''}>${x}</option>`).join(''); };
       $('#vrD').onchange = fillTowns; fillTowns();
       let imgs = [];
       $('#pfImgs').onchange = async (e) => { imgs = []; for (const f of [...e.target.files].slice(0, 6)) imgs.push(await compressImage(f)); $('#pfThumbs').innerHTML = imgs.map((s) => `<img src="${s}">`).join(''); };
@@ -690,6 +719,7 @@ async function viewVendorRegister() {
             category: f.category, district: f.district, town: f.town, serviceDistricts: sd, address: f.address, gst: f.gst, regNo: f.regNo, description: f.description,
             portfolio: imgs, packages: [], startingPrice: 0, priceUnit: '', rating: 0, reviewCount: 0, policies: '', traditions: [], offer: '', blockedDates: [],
             status: 'pending', verified: false, featured: false, views: 0, createdAt: Date.now(),
+            claimOf: claim ? claimId : '', corridor: claim?.corridor || '', placeId: claim?.placeId || '', mapsUrl: claim?.mapsUrl || '',
           });
           await db.update('users', S.user.uid, { role: 'vendor' });
           toast('Submitted for verification'); await loadSession(S.user); go('#/vendor/services');
@@ -842,7 +872,8 @@ async function viewAdmin(tab) {
   const pending = vs.filter((v) => v.status === 'pending');
   const conf = es.filter((e) => e.status === 'confirmed');
   const stat = (n, l) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`;
-  const vRow = (v) => `<div class="list-item"><div><a href="#/v/${v.id}"><b>${esc(v.businessName)}</b></a> ${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}<div class="small muted">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))} · ${esc(v.phone)}${v.gst ? ' · GST ' + esc(v.gst) : ''}</div>
+  const vRow = (v) => `<div class="list-item"><div><a href="#/v/${v.id}"><b>${esc(v.businessName)}</b></a> ${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}<div class="small muted">${esc(catName(v.category))} · ${esc(v.town)}, ${esc(distName(v.district))}${v.phone ? ' · ' + esc(v.phone) : ''}${v.gst ? ' · GST ' + esc(v.gst) : ''}${v.isReal ? ' · real listing (unclaimed)' : ''}</div>
+      ${v.claimOf ? `<div class="small" style="color:var(--warn);font-weight:600">Claim of: ${esc(vs.find((x) => x.id === v.claimOf)?.businessName || v.claimOf)} — call the owner to confirm before approving</div>` : ''}
       <div class="row wrap-x small" style="margin-top:4px"><span class="badge ${v.status === 'approved' ? 'ok' : v.status === 'pending' ? 'warn' : 'bad'}">${esc(v.status)}</span>${v.verified ? '<span class="badge">✔ verified</span>' : ''}${v.featured ? '<span class="badge gold">featured</span>' : ''}</div></div>
     <div class="row wrap-x" style="justify-content:flex-end">
       ${v.status === 'pending' ? `<button class="btn sm green" data-act="approve" data-id="${v.id}">Approve & verify</button><button class="btn sm ghost" data-act="reject" data-id="${v.id}">Reject</button>` : ''}
@@ -855,6 +886,8 @@ async function viewAdmin(tab) {
       <div class="card"><h3>Verification queue</h3>${pending.map(vRow).join('') || '<p class="muted small">No vendors waiting.</p>'}</div>
       <div class="card stack"><h3 style="margin:0">Demo data</h3><p class="small muted" style="margin:0">${vs.filter((v) => v.isDemo).length} demo vendors loaded. Demo vendors are labelled “Demo” everywhere in the app.</p>
         <div class="row wrap-x"><button class="btn sm" data-act="seed">Load demo venues</button><button class="btn sm ghost" data-act="unseed">Hide demo venues</button></div></div>
+      <div class="card stack"><h3 style="margin:0">Real halls</h3><p class="small muted" style="margin:0">${vs.filter((v) => v.isReal).length} real halls loaded (Chavakkad – Ponnani highway), ${vs.filter((v) => v.isReal && v.claimed).length} claimed by owners. Only name, type, locality and Google Maps place ID are stored.</p>
+        <div class="row wrap-x"><button class="btn sm" data-act="loadReal">Load real halls</button></div></div>
       <div class="card"><h3>Possible duplicates</h3>${dupes(vs) || '<p class="muted small">No vendors share a phone number.</p>'}</div>
       <p class="small muted">Commission, subscriptions, coupons, banners and payment tracking arrive in Phases 2–3.</p>`;
   } else if (tab === 'vendors') {
@@ -871,12 +904,13 @@ async function viewAdmin(tab) {
         const b = e.target.closest('[data-act]'); if (!b) return;
         const id = b.dataset.id; const v = vs.find((x) => x.id === id);
         const a = b.dataset.act;
-        if (a === 'approve') await db.update('vendors', id, { status: 'approved', verified: true, verifiedAt: Date.now() });
+        if (a === 'approve') { await db.update('vendors', id, { status: 'approved', verified: true, verifiedAt: Date.now() }); if (v.claimOf) await db.update('vendors', v.claimOf, { status: 'claimed', claimed: true, claimedBy: id }); }
         if (a === 'reject') await db.update('vendors', id, { status: 'rejected' });
         if (a === 'suspend' && confirm('Suspend this vendor? Their listing will be hidden.')) await db.update('vendors', id, { status: 'suspended' });
         if (a === 'restore') await db.update('vendors', id, { status: 'approved' });
         if (a === 'toggle') await db.update('vendors', id, { [b.dataset.f]: !v[b.dataset.f] });
         if (a === 'seed') { b.disabled = true; for (const s of buildSeedVendors()) { const { id: sid, ...rest } = s; await db.set('vendors', sid, rest); } for (const k of buildSeedBookings()) { const { id: kid, ...rest } = k; await db.set('slots', kid, rest).catch(() => {}); } toast('Demo venues loaded'); }
+        if (a === 'loadReal') { b.disabled = true; const have = new Set(vs.map((x) => x.id)); for (const r of buildRealHalls()) { if (have.has(r.id)) continue; const { id: rid, ...rest } = r; await db.set('vendors', rid, rest); } toast('Real halls loaded'); }
         if (a === 'unseed') { for (const s of vs.filter((x) => x.isDemo)) await db.update('vendors', s.id, { status: 'archived' }); toast('Demo vendors hidden'); }
         vendorCache = null; render();
       };
@@ -912,7 +946,7 @@ async function route() {
     case 'login': return viewLogin(params);
     case 'profile': return viewProfile();
     case 'vendor':
-      if (parts[1] === 'register') return viewVendorRegister();
+      if (parts[1] === 'register') return viewVendorRegister(params);
       if (r !== 'vendor' || !S.vendor) { if (S.user && r !== 'admin') return viewVendorRegister(); return { html: needLogin() }; }
       if (parts[1] === 'enquiries') return viewVendorEnquiries(false);
       if (parts[1] === 'bookings') return viewVendorEnquiries(true);
