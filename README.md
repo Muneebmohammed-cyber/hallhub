@@ -9,6 +9,13 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
 - **Venue page:** seating, dining and parking capacity, AC, catering rule, bridal rooms, facilities, hall rent per slot, a live availability calendar, Google Maps link, WhatsApp and call buttons, booking policies.
 - **Booking request → quotation → negotiation → confirmation:** the venue sends a quotation (pre-filled with the slot rent and a 25% advance). The customer accepts, asks for a lower price, or declines, and every version is kept.
 - **No double bookings:** when a customer accepts, the slot is locked in the database (one record per venue, date and half-day, which can be created but never overwritten). If two people try to take the same slot, the second gets "this slot was just booked".
+- **Owner register (replaces the paper booking diary):**
+  - Add phone and walk-in bookings with customer, mobile, event, guests, rent, extra charges and advance. The slot is blocked for HallHub customers straight away.
+  - Confirmed HallHub bookings appear in the register automatically.
+  - Record each payment (cash, UPI, bank transfer, cheque) and see the balance per booking.
+  - Print a receipt for every payment or save it as PDF, and send it, a booking confirmation or a payment reminder on WhatsApp.
+  - Cancel a booking to free the slot.
+  - Reports: bookings, booking value, money collected, hall occupancy, pending dues, 12-month trend, and breakdowns by event, slot and source. Export everything as CSV for Excel.
 - **Venue owner calendar:** month view of booked slots. Owners can block slots they booked offline (phone, walk-in) so customers can't request them.
 - **Venue owner dashboard:** enquiries, revision requests, confirmed bookings, money booked this month, upcoming events, profile views. Venue editor for capacity, AC, catering, facilities, slot prices, offers and photos.
 - **Customers:** My Events with a countdown and money committed against budget, side-by-side quotation comparison, saved venues, bookings list.

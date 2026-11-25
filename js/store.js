@@ -2,20 +2,21 @@
 // db.get(col, id) · db.list(col, [field, value]?) · db.add(col, data) · db.set(col, id, data) · db.update(col, id, patch)
 // auth.onChange(cb) · auth.google() · auth.sendOtp(phone, buttonId) · auth.verifyOtp(code) · auth.demo(role) · auth.signOut()
 import { firebaseConfig, DEMO_MODE } from './config.js';
-import { buildSeedVendors, buildSeedBookings, buildRealHalls } from './data.js';
+import { buildSeedVendors, buildSeedBookings, buildRealHalls, buildSeedRegister } from './data.js';
 
 export let db, auth;
 
 if (DEMO_MODE) {
-  const KEY = 'hh_demo_db_v3';
+  const KEY = 'hh_demo_db_v4';
   const load = () => JSON.parse(localStorage.getItem(KEY) || 'null');
   const persist = (s) => localStorage.setItem(KEY, JSON.stringify(s));
   let state = load();
   if (!state) {
-    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, slots: {} };
+    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, slots: {}, register: {} };
     buildSeedVendors().forEach((v) => { state.vendors[v.id] = v; });
     buildRealHalls().forEach((v) => { state.vendors[v.id] = v; });
     buildSeedBookings().forEach((b) => { state.slots[b.id] = b; });
+    const sr = buildSeedRegister(); sr.register.forEach((r) => { state.register[r.id] = r; }); sr.slots.forEach((b) => { state.slots[b.id] = b; });
     state.users.demo_customer = { id: 'demo_customer', name: 'Demo Customer', phone: '+91 90000 00001', role: 'customer', isDemo: true };
     state.users.demo_vendor = { id: 'demo_vendor', name: 'Demo Vendor', phone: '+91 90000 01000', role: 'vendor', isDemo: true };
     state.users.demo_admin = { id: 'demo_admin', name: 'Demo Admin', role: 'admin', isDemo: true };

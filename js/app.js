@@ -3,7 +3,7 @@ import { DEMO_MODE } from './config.js';
 import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, buildRealHalls, CORRIDORS, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
 import { t, getLang, setLang, nameOf } from './i18n.js';
 import { coverURL, icon } from './art.js';
-const NAV_ICON = { home: 'home', explore: 'search', events: 'events', bookings: 'bookings', profile: 'profile', dashboard: 'dashboard', enquiries: 'enquiries', calendar: 'calendar', services: 'services', venue: 'venue', venues: 'venues', Customers: 'customers' };
+const NAV_ICON = { home: 'home', explore: 'search', events: 'events', bookings: 'bookings', profile: 'profile', dashboard: 'dashboard', enquiries: 'enquiries', calendar: 'calendar', services: 'services', venue: 'venue', venues: 'venues', Customers: 'customers', register: 'calendar' };
 
 // ---------- helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -51,14 +51,15 @@ async function loadSession(u) {
 const NAV = {
   guest: [['#/', 'home', '🏠'], ['#/explore', 'explore', '🔍'], ['#/events', 'events', '💍'], ['#/bookings', 'bookings', '📒'], ['#/profile', 'profile', '👤']],
   customer: [['#/', 'home', '🏠'], ['#/explore', 'explore', '🔍'], ['#/events', 'events', '💍'], ['#/bookings', 'bookings', '📒'], ['#/profile', 'profile', '👤']],
-  vendor: [['#/vendor', 'dashboard', '📊'], ['#/vendor/enquiries', 'enquiries', '✉️'], ['#/vendor/calendar', 'calendar', '📅'], ['#/vendor/services', 'services', '🧾'], ['#/profile', 'profile', '👤']],
+  vendor: [['#/vendor', 'dashboard', '📊'], ['#/vendor/enquiries', 'enquiries', '✉️'], ['#/vendor/calendar', 'register', '📅'], ['#/vendor/services', 'services', '🧾'], ['#/profile', 'profile', '👤']],
   admin: [['#/admin', 'dashboard', '📊'], ['#/admin/vendors', 'venues', '🏛️'], ['#/admin/customers', 'Customers', '👥'], ['#/admin/enquiries', 'enquiries', '✉️'], ['#/profile', 'profile', '👤']],
 };
 
 function shell(inner) {
   let nav = NAV[role()] || NAV.guest;
   if (role() === 'vendor' && isVenue(S.vendor)) nav = nav.map((n) => (n[1] === 'services' ? [n[0], 'venue', '🏛️'] : n));
-  const path = location.hash.split('?')[0] || '#/';
+  let path = location.hash.split('?')[0] || '#/';
+  if (/^#\/vendor\/(booking|receipt|reports)/.test(path)) path = '#/vendor/calendar';
   const active = (h) => (h === '#/' ? path === '#/' || path === '' : path === h || (path.startsWith(h + '/') && !nav.some(([x]) => x !== h && path.startsWith(x) && x.length > h.length)));
   return `
   ${DEMO_MODE ? `<div class="demo-banner">${t('demoBanner')}</div>` : ''}
@@ -743,10 +744,19 @@ async function viewVendorDash() {
   const rev = conf.filter((e) => new Date(e.confirmedAt || e.createdAt).toISOString().slice(0, 7) === month).reduce((s, e) => s + (e.finalAmount || 0), 0);
   const upcoming = conf.filter((e) => e.date >= today()).sort((a, b) => a.date.localeCompare(b.date));
   const stat = (n, l) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`;
+  const reg = isVenue(v) ? (await loadRegister()).filter(regActive) : [];
+  const regMonth = reg.filter((r) => ymOf(r.date) === month);
+  const collected = reg.flatMap((r) => r.payments || []).filter((p) => ymOf(p.date) === month).reduce((a, p) => a + Number(p.amount), 0);
+  const dueTotal = reg.reduce((a, r) => a + Math.max(0, regBal(r)), 0);
+  const next = reg.filter((r) => r.date >= today()).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
   return {
     html: `<div class="wrap stack" style="padding-top:16px">
       <div><h1 style="margin:0">${esc(v.businessName)}</h1><div class="row wrap-x small">${v.status === 'approved' ? '<span class="badge ok">Live</span>' : `<span class="badge warn">${v.status === 'pending' ? 'Awaiting admin verification' : esc(v.status)}</span>`}${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}</div></div>
       ${isVenue(v) ? (!v.slotPrices?.full ? '<div class="card" style="background:#fbeed6">Add your capacity and slot prices so customers can find and book your hall. <a href="#/vendor/services">Add venue details →</a></div>' : '') : (!v.packages?.length ? '<div class="card" style="background:#fbeed6">Add at least one package so customers can see your prices. <a href="#/vendor/services">Add packages →</a></div>' : '')}
+      ${isVenue(v) ? `<div class="stat-grid">${stat(regMonth.length, 'Bookings this month')}${stat(money(regMonth.reduce((a, r) => a + regTotal(r), 0)), 'Booking value this month')}${stat(money(collected), 'Collected this month')}${stat(money(dueTotal), 'Dues pending')}</div>
+      <div class="row wrap-x"><a class="btn" href="#/vendor/calendar">Add a booking</a><a class="btn ghost" href="#/vendor/reports">Reports</a></div>
+      <div class="card"><h3>Next events</h3>${next.map((r) => `<a class="list-item" href="#/vendor/booking/${r.id}" style="color:var(--ink)"><div><b>${fmtDate(r.date)}</b> · ${esc(slotName(r.slot))}<div class="small muted">${esc(r.customerName)} · ${esc(r.eventType)}</div></div>${regBal(r) > 0 ? `<b style="color:var(--warn)">Due ${money(regBal(r))}</b>` : '<span class="small muted">Paid</span>'}</a>`).join('') || '<p class="muted small">No upcoming bookings.</p>'}</div>
+      <h2 style="margin-top:8px">HallHub requests</h2>` : ''}
       <div class="stat-grid">${stat(es.length, 'Total enquiries')}${stat(es.filter((e) => e.status === 'enquiry').length, 'New enquiries')}${stat(es.filter((e) => e.status === 'negotiation').length, 'Revision requests')}${stat(es.filter((e) => e.status === 'quoted').length, 'Quotes awaiting reply')}${stat(conf.length, 'Confirmed bookings')}${stat(money(rev), 'Booked this month')}${stat(v.views || 0, 'Profile views')}${stat('★ ' + Number(v.rating || 0).toFixed(1), (v.reviewCount || 0) + ' reviews')}</div>
       <div class="card"><h3>Needs your action</h3>${es.filter((e) => ['enquiry', 'negotiation'].includes(e.status)).slice(0, 6).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${esc(e.customerName)}</b><div class="small muted">${esc(e.eventType)} · ${fmtDate(e.date)}${e.slot ? ' · ' + esc(slotName(e.slot)) : ''} · ${e.guests || '—'} guests</div></div>${statusBadge(e.status)}</a>`).join('') || '<p class="muted small">All caught up.</p>'}</div>
       <div class="card"><h3>Upcoming events</h3>${upcoming.slice(0, 5).map((e) => `<a class="list-item" href="#/enquiry/${e.id}" style="color:var(--ink)"><div><b>${fmtDate(e.date)}</b>${e.slot ? ' · ' + esc(slotName(e.slot)) : ''} · ${esc(e.customerName)}<div class="small muted">${esc(e.eventType)} · ${e.guests || '—'} guests</div></div><span class="price">${money(e.finalAmount)}</span></a>`).join('') || '<p class="muted small">No upcoming bookings.</p>'}</div>
@@ -924,6 +934,228 @@ function dupes(vs) {
 }
 
 // =====================================================================
+// OWNER REGISTER — replaces the paper booking diary
+// =====================================================================
+const PAY_MODES = ['Cash', 'UPI', 'Bank transfer', 'Cheque'];
+const regTotal = (r) => Number(r.rent || 0) + Number(r.extras || 0);
+const regPaid = (r) => (r.payments || []).reduce((a, p) => a + Number(p.amount || 0), 0);
+const regBal = (r) => regTotal(r) - regPaid(r);
+const regActive = (r) => r.status !== 'cancelled';
+const ymOf = (d) => (d || '').slice(0, 7);
+const monthName = (ym) => { const [y, m] = ym.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }); };
+const waLink = (phone, text) => `https://wa.me/${('91' + String(phone || '').replace(/\D/g, '').slice(-10))}?text=${encodeURIComponent(text)}`;
+
+// Confirmed HallHub bookings appear in the register automatically.
+async function loadRegister() {
+  const uid = S.user.uid;
+  const [reg, es] = await Promise.all([db.list('register', ['venueId', uid]), db.list('enquiries', ['vendorOwnerId', uid])]);
+  const have = new Set(reg.map((r) => r.enquiryId).filter(Boolean));
+  for (const e of es.filter((x) => x.status === 'confirmed' && x.isVenue && !have.has(x.id))) {
+    const r = { venueId: uid, ownerId: uid, date: e.date, slot: e.slot, customerName: e.customerName, customerPhone: e.customerPhone || '', eventType: e.eventType, guests: e.guests || 0,
+      rent: Number(e.finalAmount || 0), extras: 0, extrasNote: '', payments: [], status: 'booked', source: 'hallhub', enquiryId: e.id, notes: e.requirements || '', createdAt: e.confirmedAt || Date.now() };
+    await db.set('register', 'hh_' + e.id, r); reg.push({ ...r, id: 'hh_' + e.id });
+  }
+  return reg;
+}
+
+async function viewRegister(params) {
+  if (role() !== 'vendor' || !isVenue(S.vendor)) return viewVendorEnquiries(true);
+  const v = S.vendor; const uid = S.user.uid;
+  let reg = await loadRegister();
+  let rows = await venueSlots(uid);
+  let ym = params.get('m') || today().slice(0, 7); let pick = params.get('d') || today();
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px">
+      <div class="row between"><h1 style="margin:0">Register</h1><a class="btn sm ghost" href="#/vendor/reports">Reports</a></div>
+      <p class="small muted" style="margin:0">Every booking for ${esc(v.businessName)} in one place, including phone and walk-in bookings. Pick a date to add one.</p>
+      <div class="card" id="vcal"></div>
+      <div class="card stack" id="dayBox"></div>
+      <div class="card stack" id="listBox"></div>
+    </div>`,
+    mount() {
+      const draw = () => {
+        $('#vcal').innerHTML = calendarHTML(ym, takenMap(rows), { selected: pick });
+        const day = rows.filter((r) => r.date === pick);
+        const taken = day.map((r) => r.half);
+        const regDay = reg.filter((r) => r.date === pick && regActive(r));
+        const blocks = day.filter((r) => r.source === 'manual' && !r.registerId);
+        $('#dayBox').innerHTML = `<div class="row between"><h3 style="margin:0">${fmtDate(pick)}</h3>${pick >= today() || true ? '' : ''}</div>
+          ${regDay.map((r) => `<a class="list-item" href="#/vendor/booking/${r.id}" style="color:var(--ink)"><div><b>${esc(r.customerName)}</b><div class="small muted">${esc(slotLabel(r.slot))} · ${esc(r.eventType)}${r.source === 'hallhub' ? ' · via HallHub' : ''}</div></div>
+            <div style="text-align:right"><div class="price">${money(regTotal(r))}</div><div class="small ${regBal(r) > 0 ? '' : 'muted'}" style="${regBal(r) > 0 ? 'color:var(--warn);font-weight:600' : ''}">${regBal(r) > 0 ? 'Due ' + money(regBal(r)) : 'Paid in full'}</div></div></a>`).join('')}
+          ${blocks.map((b) => `<div class="list-item"><div><b>${esc(slotLabel(b.half))}</b><div class="small muted">Blocked · ${esc(b.note || 'no details')}</div></div><button class="btn sm ghost" data-unblock="${b.id}">Unblock</button></div>`).join('')}
+          ${slotFree(taken, 'morning') || slotFree(taken, 'evening') ? `<button class="btn block" data-act="newBk">Add a booking on this date</button>` : '<p class="small muted" style="margin:0">Fully booked.</p>'}
+          <form id="bkForm" class="form-grid" style="display:none">
+            <div><label>Slot</label><select name="slot">${SLOTS.filter((x) => slotFree(taken, x.id)).map((x) => `<option value="${x.id}">${nameOf(x)} · ${x.time}</option>`).join('')}</select></div>
+            <div><label>Customer name</label><input name="customerName" required></div>
+            <div><label>Mobile number</label><input name="customerPhone" inputmode="tel" placeholder="98XXXXXXXX"></div>
+            <div><label>Event</label><select name="eventType">${EVENT_TYPES.map((x) => `<option>${x}</option>`).join('')}</select></div>
+            <div><label>Guests</label><input type="number" name="guests" min="0"></div>
+            <div><label>Hall rent (₹)</label><input type="number" name="rent" min="0" required></div>
+            <div><label>Extra charges (₹)</label><input type="number" name="extras" min="0" value="0"></div>
+            <div><label>Advance received (₹)</label><input type="number" name="advance" min="0" value="0"></div>
+            <div><label>Paid by</label><select name="mode">${PAY_MODES.map((x) => `<option>${x}</option>`).join('')}</select></div>
+            <div class="full"><label>Notes</label><input name="notes" placeholder="Decoration by customer, generator needed…"></div>
+            <div class="full row"><button class="btn">Save booking</button><button type="button" class="btn ghost" data-act="justBlock">Only block the slot</button></div>
+          </form>`;
+        const f = $('#bkForm');
+        if (f) {
+          const setRent = () => { f.rent.value = v.slotPrices?.[f.slot.value] || ''; };
+          f.slot.onchange = setRent; setRent();
+          f.onsubmit = async (e) => {
+            e.preventDefault(); const d = formData(f);
+            if (Number(d.advance) > Number(d.rent) + Number(d.extras || 0)) return toast('Advance is more than the total');
+            const id = `reg_${uid}_${Date.now()}`;
+            try { await db.createMany('slots', halvesOf(d.slot).map((h) => [`${uid}_${pick}_${h}`, { venueId: uid, date: pick, half: h, source: 'manual', registerId: id, note: d.customerName }])); }
+            catch (err) { return toast(err.message === 'ALREADY_TAKEN' ? 'That slot is already booked' : err.message); }
+            await db.set('register', id, { venueId: uid, ownerId: uid, date: pick, slot: d.slot, customerName: d.customerName, customerPhone: d.customerPhone, eventType: d.eventType, guests: Number(d.guests) || 0,
+              rent: Number(d.rent) || 0, extras: Number(d.extras) || 0, extrasNote: '', payments: Number(d.advance) > 0 ? [{ amount: Number(d.advance), date: today(), mode: d.mode, note: 'Advance' }] : [],
+              status: 'booked', source: 'offline', notes: d.notes, createdAt: Date.now() });
+            toast('Booking saved'); go(`#/vendor/booking/${id}`);
+          };
+        }
+        const list = reg.filter((r) => ymOf(r.date) === ym && regActive(r)).sort((a, b) => a.date.localeCompare(b.date));
+        const sum = list.reduce((a, r) => a + regTotal(r), 0); const due = list.reduce((a, r) => a + Math.max(0, regBal(r)), 0);
+        $('#listBox').innerHTML = `<div class="row between"><h3 style="margin:0">${monthName(ym)} bookings</h3><span class="small muted">${list.length} · ${money(sum)}${due ? ' · ' + money(due) + ' due' : ''}</span></div>
+          ${list.map((r) => `<a class="list-item" href="#/vendor/booking/${r.id}" style="color:var(--ink)"><div><b>${fmtDate(r.date)}</b> · ${esc(slotName(r.slot))}<div class="small muted">${esc(r.customerName)} · ${esc(r.eventType)}</div></div><div style="text-align:right"><div class="price">${money(regTotal(r))}</div>${regBal(r) > 0 ? `<div class="small" style="color:var(--warn);font-weight:600">Due ${money(regBal(r))}</div>` : '<div class="small muted">Paid</div>'}</div></a>`).join('') || '<p class="small muted" style="margin:0">No bookings this month yet.</p>'}`;
+      };
+      draw();
+      $('#view').onclick = async (e) => {
+        const c = e.target.closest('[data-cal]'); if (c) { ym = addMonth(ym, Number(c.dataset.cal)); return draw(); }
+        const d = e.target.closest('[data-day]'); if (d) { pick = d.dataset.day; ym = pick.slice(0, 7); draw(); return $('#dayBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        const a = e.target.closest('[data-act]')?.dataset.act;
+        if (a === 'newBk') { $('#bkForm').style.display = 'grid'; e.target.style.display = 'none'; $('#bkForm [name=customerName]').focus(); }
+        if (a === 'justBlock') {
+          const f = $('#bkForm'); const sl = f.slot.value;
+          try { await db.createMany('slots', halvesOf(sl).map((h) => [`${uid}_${pick}_${h}`, { venueId: uid, date: pick, half: h, source: 'manual', note: f.customerName.value || 'Blocked' }])); toast('Slot blocked'); }
+          catch (err) { toast(err.message === 'ALREADY_TAKEN' ? 'Already booked' : err.message); }
+          rows = await venueSlots(uid); draw();
+        }
+        const ub = e.target.closest('[data-unblock]');
+        if (ub) { await db.remove('slots', ub.dataset.unblock); rows = await venueSlots(uid); draw(); }
+      };
+    },
+  };
+}
+
+async function viewRegisterEntry(id) {
+  if (role() !== 'vendor') return { html: needLogin() };
+  const r = await db.get('register', id);
+  if (!r || r.venueId !== S.user.uid) return { html: '<div class="wrap empty">Booking not found.</div>' };
+  const v = S.vendor;
+  const total = regTotal(r), paid = regPaid(r), bal = total - paid;
+  const confirmText = `Dear ${r.customerName},\nYour booking at ${v.businessName} is confirmed.\nDate: ${fmtDate(r.date)}, ${slotLabel(r.slot)}\nEvent: ${r.eventType}\nTotal: ${money(total)}\nPaid: ${money(paid)}\nBalance: ${money(bal)}\nThank you.`;
+  const reminderText = `Dear ${r.customerName},\nA reminder that ${money(bal)} is pending for your booking at ${v.businessName} on ${fmtDate(r.date)}.\nThank you.`;
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px">
+      <a href="#/vendor/calendar?d=${r.date}&m=${r.date.slice(0, 7)}" class="small">← Register</a>
+      <div class="card stack">
+        <div class="row between wrap-x"><h2 style="margin:0">${esc(r.customerName)}</h2>${r.status === 'cancelled' ? '<span class="badge bad">Cancelled</span>' : bal > 0 ? `<span class="badge warn">Due ${money(bal)}</span>` : '<span class="badge ok">Paid in full</span>'}</div>
+        <table class="cmp"><tr><td>Date</td><td>${fmtDate(r.date)} · ${esc(slotLabel(r.slot))}</td></tr><tr><td>Event</td><td>${esc(r.eventType)}${r.guests ? ' · ' + r.guests + ' guests' : ''}</td></tr>
+          <tr><td>Mobile</td><td>${r.customerPhone ? `<a href="tel:${esc(r.customerPhone)}">${esc(r.customerPhone)}</a>` : '—'}</td></tr><tr><td>Booked via</td><td>${r.source === 'hallhub' ? `HallHub${r.enquiryId ? ` · <a href="#/enquiry/${r.enquiryId}">view request</a>` : ''}` : 'Phone / walk-in'}</td></tr>
+          ${r.notes ? `<tr><td>Notes</td><td>${esc(r.notes)}</td></tr>` : ''}</table>
+      </div>
+      <div class="card stack"><h3 style="margin:0">Payments</h3>
+        <table class="cmp"><tr><td>Hall rent</td><td>${money(r.rent)}</td></tr><tr><td>Extra charges</td><td>${money(r.extras)}${r.extrasNote ? ' · ' + esc(r.extrasNote) : ''}</td></tr>
+          <tr><td><b>Total</b></td><td><b>${money(total)}</b></td></tr><tr><td>Received</td><td>${money(paid)}</td></tr><tr><td><b>Balance</b></td><td><b style="color:${bal > 0 ? 'var(--warn)' : 'var(--ok)'}">${money(bal)}</b></td></tr></table>
+        ${(r.payments || []).map((p, i) => `<div class="list-item"><div><b>${money(p.amount)}</b> <span class="small muted">${esc(p.mode)}${p.note ? ' · ' + esc(p.note) : ''}</span><div class="small muted">${fmtDate(p.date)}</div></div><a class="btn sm ghost" href="#/vendor/receipt/${id}/${i}">Receipt</a></div>`).join('') || '<p class="small muted" style="margin:0">No payments recorded yet.</p>'}
+        ${r.status !== 'cancelled' && bal > 0 ? `<form id="payForm" class="form-grid"><div><label>Amount received (₹)</label><input type="number" name="amount" min="1" max="${bal}" value="${bal}" required></div>
+          <div><label>Paid by</label><select name="mode">${PAY_MODES.map((x) => `<option>${x}</option>`).join('')}</select></div><div><label>Date</label><input type="date" name="date" value="${today()}" required></div>
+          <div><label>Note</label><input name="note" placeholder="Balance, second instalment…"></div><div class="full"><button class="btn">Record payment</button></div></form>` : ''}
+      </div>
+      ${r.status !== 'cancelled' ? `<div class="card stack"><h3 style="margin:0">Charges</h3><form id="chgForm" class="form-grid">
+        <div><label>Hall rent (₹)</label><input type="number" name="rent" min="0" value="${r.rent}"></div><div><label>Extra charges (₹)</label><input type="number" name="extras" min="0" value="${r.extras || 0}"></div>
+        <div class="full"><label>What the extra charges are for</label><input name="extrasNote" value="${esc(r.extrasNote || '')}" placeholder="Electricity beyond slot, generator, cleaning…"></div><div class="full"><button class="btn ghost">Update charges</button></div></form></div>` : ''}
+      ${r.customerPhone ? `<div class="row wrap-x"><a class="btn green" target="_blank" rel="noopener" href="${waLink(r.customerPhone, confirmText)}">Send confirmation on WhatsApp</a>${bal > 0 && r.status !== 'cancelled' ? `<a class="btn ghost" target="_blank" rel="noopener" href="${waLink(r.customerPhone, reminderText)}">Send payment reminder</a>` : ''}</div>` : ''}
+      ${r.status !== 'cancelled' ? '<button class="btn ghost" data-act="cancelBk" style="color:var(--bad)">Cancel this booking</button>' : ''}
+      <div style="height:12px"></div></div>`,
+    mount() {
+      const pf = $('#payForm');
+      if (pf) pf.onsubmit = async (e) => { e.preventDefault(); const d = formData(pf); await db.update('register', id, { payments: [...(r.payments || []), { amount: Number(d.amount), mode: d.mode, date: d.date, note: d.note || (Number(d.amount) >= bal ? 'Balance' : 'Instalment') }] }); toast('Payment recorded'); render(); };
+      const cf = $('#chgForm');
+      if (cf) cf.onsubmit = async (e) => { e.preventDefault(); const d = formData(cf); await db.update('register', id, { rent: Number(d.rent) || 0, extras: Number(d.extras) || 0, extrasNote: d.extrasNote }); toast('Charges updated'); render(); };
+      $('#view').onclick = async (e) => {
+        if (e.target.closest('[data-act=cancelBk]') && confirm('Cancel this booking and free the slot?')) {
+          for (const h of halvesOf(r.slot)) await db.remove('slots', `${r.venueId}_${r.date}_${h}`).catch(() => {});
+          await db.update('register', id, { status: 'cancelled', cancelledAt: Date.now() }); toast('Booking cancelled'); render();
+        }
+      };
+    },
+  };
+}
+
+async function viewReceipt(id, idx) {
+  if (role() !== 'vendor') return { html: needLogin() };
+  const r = await db.get('register', id); const p = r?.payments?.[Number(idx)];
+  if (!r || !p || r.venueId !== S.user.uid) return { html: '<div class="wrap empty">Receipt not found.</div>' };
+  const v = S.vendor;
+  const no = `HH-${p.date.replace(/-/g, '').slice(2, 6)}-${id.slice(-4).toUpperCase()}-${Number(idx) + 1}`;
+  const paidToDate = (r.payments || []).slice(0, Number(idx) + 1).reduce((a, x) => a + Number(x.amount), 0);
+  const balAfter = regTotal(r) - paidToDate;
+  const text = `Receipt ${no}\n${v.businessName}\nReceived ${money(p.amount)} from ${r.customerName} by ${p.mode} on ${fmtDate(p.date)}\nBooking: ${fmtDate(r.date)}, ${slotLabel(r.slot)}\nTotal ${money(regTotal(r))} · Paid ${money(paidToDate)} · Balance ${money(balAfter)}`;
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px">
+      <div class="row between no-print"><a href="#/vendor/booking/${id}" class="small">← Booking</a><div class="row"><button class="btn sm ghost" data-act="print">Print / Save PDF</button>${r.customerPhone ? `<a class="btn sm green" target="_blank" rel="noopener" href="${waLink(r.customerPhone, text)}">WhatsApp</a>` : ''}</div></div>
+      <div class="card receipt stack">
+        <div class="row between" style="align-items:flex-start"><div><h2 style="margin:0">${esc(v.businessName)}</h2><div class="small muted">${esc(v.address || '')}${v.phone ? '<br>' + esc(v.phone) : ''}${v.gst ? '<br>GSTIN ' + esc(v.gst) : ''}</div></div>
+          <div style="text-align:right"><b>Receipt</b><div class="small muted">${no}<br>${fmtDate(p.date)}</div></div></div>
+        <p style="margin:0">Received with thanks from <b>${esc(r.customerName)}</b> the sum of <b>${money(p.amount)}</b> by ${esc(p.mode)}${p.note ? ` (${esc(p.note)})` : ''}.</p>
+        <table class="cmp"><tr><td>Booking</td><td>${esc(r.eventType)} · ${fmtDate(r.date)} · ${esc(slotLabel(r.slot))}</td></tr><tr><td>Total charges</td><td>${money(regTotal(r))}</td></tr>
+          <tr><td>Paid to date</td><td>${money(paidToDate)}</td></tr><tr><td><b>Balance</b></td><td><b>${money(balAfter)}</b></td></tr></table>
+        <div class="row between small muted" style="padding-top:24px"><span>Generated with HallHub</span><span>Authorised signatory</span></div>
+      </div></div>`,
+    mount() { $('#view').onclick = (e) => { if (e.target.closest('[data-act=print]')) window.print(); }; },
+  };
+}
+
+async function viewReports(params) {
+  if (role() !== 'vendor' || !isVenue(S.vendor)) return { html: needLogin() };
+  const reg = (await loadRegister()).filter(regActive);
+  const ym = params.get('m') || today().slice(0, 7);
+  const months = Array.from({ length: 12 }, (_, i) => addMonth(today().slice(0, 7), i - 9));
+  const inM = reg.filter((r) => ymOf(r.date) === ym);
+  const booked = inM.reduce((a, r) => a + regTotal(r), 0);
+  const collected = reg.flatMap((r) => r.payments || []).filter((p) => ymOf(p.date) === ym).reduce((a, p) => a + Number(p.amount), 0);
+  const [yy, mm] = ym.split('-').map(Number); const days = new Date(yy, mm, 0).getDate();
+  const halves = inM.reduce((a, r) => a + halvesOf(r.slot).length, 0);
+  const occ = Math.round((halves / (days * 2)) * 100);
+  const dues = reg.filter((r) => regBal(r) > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const dueTotal = dues.reduce((a, r) => a + regBal(r), 0);
+  const bySource = { offline: inM.filter((r) => r.source !== 'hallhub').length, hallhub: inM.filter((r) => r.source === 'hallhub').length };
+  const byType = {}; inM.forEach((r) => { byType[r.eventType] = (byType[r.eventType] || 0) + 1; });
+  const bySlot = { morning: 0, evening: 0, full: 0 }; inM.forEach((r) => { bySlot[r.slot] = (bySlot[r.slot] || 0) + 1; });
+  const trend = months.map((m) => ({ m, v: reg.filter((r) => ymOf(r.date) === m).reduce((a, r) => a + regTotal(r), 0) }));
+  const max = Math.max(1, ...trend.map((x) => x.v));
+  const stat = (n, l) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`;
+  const bar = (label, n, of) => `<div class="hbar"><span>${esc(label)}</span><i style="--w:${of ? Math.round((n / of) * 100) : 0}%"></i><b>${n}</b></div>`;
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px">
+      <div class="row between wrap-x"><h1 style="margin:0">Reports</h1><div class="row"><select id="mSel" style="width:auto">${months.slice().reverse().map((m) => `<option value="${m}" ${m === ym ? 'selected' : ''}>${monthName(m)}</option>`).join('')}</select><button class="btn sm ghost" data-act="csv">Export CSV</button></div></div>
+      <div class="stat-grid">${stat(inM.length, 'Bookings')}${stat(money(booked), 'Booking value')}${stat(money(collected), 'Collected this month')}${stat(occ + '%', 'Hall occupancy')}${stat(money(dueTotal), 'Dues pending (all)')}${stat(bySource.hallhub, 'Bookings via HallHub')}</div>
+      <div class="card stack"><h3 style="margin:0">Booking value by month</h3>
+        <div class="vbars">${trend.map((x) => `<div class="${x.m === ym ? 'on' : ''}" title="${monthName(x.m)}: ${money(x.v)}"><i style="--h:${Math.round((x.v / max) * 100)}%"></i><span>${monthName(x.m).split(' ')[0]}</span></div>`).join('')}</div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
+        <div class="card stack"><h3 style="margin:0">By event</h3>${Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, n]) => bar(k, n, inM.length)).join('') || '<p class="small muted" style="margin:0">No bookings this month.</p>'}</div>
+        <div class="card stack"><h3 style="margin:0">By slot</h3>${SLOTS.map((x) => bar(nameOf(x), bySlot[x.id] || 0, inM.length)).join('')}</div>
+        <div class="card stack"><h3 style="margin:0">Where bookings came from</h3>${bar('Phone / walk-in', bySource.offline, inM.length)}${bar('HallHub', bySource.hallhub, inM.length)}</div>
+      </div>
+      <div class="card stack"><h3 style="margin:0">Pending dues</h3>${dues.map((r) => `<a class="list-item" href="#/vendor/booking/${r.id}" style="color:var(--ink)"><div><b>${esc(r.customerName)}</b><div class="small muted">${fmtDate(r.date)} · ${esc(slotName(r.slot))}${r.date < today() ? ' · event over' : ''}</div></div><b style="color:var(--warn)">${money(regBal(r))}</b></a>`).join('') || '<p class="small muted" style="margin:0">No pending dues.</p>'}</div>
+    </div>`,
+    mount() {
+      $('#mSel').onchange = (e) => go('#/vendor/reports?m=' + e.target.value);
+      $('#view').onclick = (e) => {
+        if (!e.target.closest('[data-act=csv]')) return;
+        const head = ['Date', 'Slot', 'Customer', 'Mobile', 'Event', 'Guests', 'Rent', 'Extras', 'Total', 'Paid', 'Balance', 'Source', 'Status', 'Notes'];
+        const all = reg.slice().sort((a, b) => a.date.localeCompare(b.date));
+        const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+        const csv = [head, ...all.map((r) => [r.date, slotName(r.slot), r.customerName, r.customerPhone, r.eventType, r.guests, r.rent, r.extras, regTotal(r), regPaid(r), regBal(r), r.source === 'hallhub' ? 'HallHub' : 'Phone/walk-in', r.status, r.notes])].map((row) => row.map(q).join(',')).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = `${S.vendor.businessName.replace(/\W+/g, '-')}-bookings.csv`; a.click();
+        toast('CSV downloaded');
+      };
+    },
+  };
+}
+
+// =====================================================================
 // ROUTER
 // =====================================================================
 async function route() {
@@ -952,7 +1184,10 @@ async function route() {
       if (parts[1] === 'enquiries') return viewVendorEnquiries(false);
       if (parts[1] === 'bookings') return viewVendorEnquiries(true);
       if (parts[1] === 'services') return viewVendorServices();
-      if (parts[1] === 'calendar') return viewVendorCalendar();
+      if (parts[1] === 'calendar') return viewRegister(params);
+      if (parts[1] === 'booking') return viewRegisterEntry(parts[2]);
+      if (parts[1] === 'receipt') return viewReceipt(parts[2], parts[3]);
+      if (parts[1] === 'reports') return viewReports(params);
       return viewVendorDash();
     case 'admin': return viewAdmin(parts[1]);
     default: return { html: '<div class="wrap empty">Page not found.</div>' };

@@ -16,7 +16,7 @@ const STR = {
     status_confirmed: 'Booking confirmed', status_declined: 'Declined', status_closed: 'Closed',
     accept: 'Accept & confirm booking', requestRevision: 'Request a revised price', decline: 'Decline',
     compare: 'Compare quotations', createEvent: 'Create event', save: 'Save', cancel: 'Cancel',
-    search: 'Search', welcome: 'Welcome', date: 'Event date', guests: 'Guests', slot: 'Slot', anySlot: 'Any slot', checkAvail: 'Check availability', available: 'Available', booked: 'Booked', calendar: 'Calendar', venue: 'My Venue', bookSlot: 'Request this slot', addons: 'Also need for your event', seating: 'Seating', dining: 'Dining', parking: 'Parking', venues: 'Venues', demoBanner: 'Demo mode — data is stored on this device only. Listings marked “Demo” are sample data.',
+    register: 'Register', search: 'Search', welcome: 'Welcome', date: 'Event date', guests: 'Guests', slot: 'Slot', anySlot: 'Any slot', checkAvail: 'Check availability', available: 'Available', booked: 'Booked', calendar: 'Calendar', venue: 'My Venue', bookSlot: 'Request this slot', addons: 'Also need for your event', seating: 'Seating', dining: 'Dining', parking: 'Parking', venues: 'Venues', demoBanner: 'Demo mode — data is stored on this device only. Listings marked “Demo” are sample data.',
   },
   ml: {
     home: 'ഹോം', explore: 'തിരയുക', events: 'എന്റെ ചടങ്ങുകൾ', bookings: 'ബുക്കിംഗുകൾ', profile: 'പ്രൊഫൈൽ',
@@ -34,7 +34,7 @@ const STR = {
     status_confirmed: 'ബുക്കിംഗ് ഉറപ്പായി', status_declined: 'നിരസിച്ചു', status_closed: 'അവസാനിച്ചു',
     accept: 'സ്വീകരിച്ച് ബുക്കിംഗ് ഉറപ്പാക്കുക', requestRevision: 'പുതുക്കിയ വില ആവശ്യപ്പെടുക', decline: 'നിരസിക്കുക',
     compare: 'ക്വട്ടേഷനുകൾ താരതമ്യം ചെയ്യുക', createEvent: 'ചടങ്ങ് ചേർക്കുക', save: 'സേവ് ചെയ്യുക', cancel: 'റദ്ദാക്കുക',
-    search: 'തിരയുക', welcome: 'സ്വാഗതം', date: 'തീയതി', guests: 'അതിഥികൾ', slot: 'സമയം', anySlot: 'ഏത് സമയവും', checkAvail: 'ലഭ്യത പരിശോധിക്കുക', available: 'ലഭ്യമാണ്', booked: 'ബുക്ക് ചെയ്തു', calendar: 'കലണ്ടർ', venue: 'എന്റെ ഹാൾ', bookSlot: 'ഈ സമയം ആവശ്യപ്പെടുക', addons: 'ചടങ്ങിന് വേണ്ട മറ്റ് സേവനങ്ങൾ', seating: 'ഇരിപ്പിടങ്ങൾ', dining: 'ഭക്ഷണ ഹാൾ', parking: 'പാർക്കിംഗ്', venues: 'ഹാളുകൾ', demoBanner: 'ഡെമോ മോഡ് — വിവരങ്ങൾ ഈ ഉപകരണത്തിൽ മാത്രം. “Demo” എന്ന് അടയാളപ്പെടുത്തിയവ സാമ്പിൾ ഡാറ്റയാണ്.',
+    register: 'രജിസ്റ്റർ', search: 'തിരയുക', welcome: 'സ്വാഗതം', date: 'തീയതി', guests: 'അതിഥികൾ', slot: 'സമയം', anySlot: 'ഏത് സമയവും', checkAvail: 'ലഭ്യത പരിശോധിക്കുക', available: 'ലഭ്യമാണ്', booked: 'ബുക്ക് ചെയ്തു', calendar: 'കലണ്ടർ', venue: 'എന്റെ ഹാൾ', bookSlot: 'ഈ സമയം ആവശ്യപ്പെടുക', addons: 'ചടങ്ങിന് വേണ്ട മറ്റ് സേവനങ്ങൾ', seating: 'ഇരിപ്പിടങ്ങൾ', dining: 'ഭക്ഷണ ഹാൾ', parking: 'പാർക്കിംഗ്', venues: 'ഹാളുകൾ', demoBanner: 'ഡെമോ മോഡ് — വിവരങ്ങൾ ഈ ഉപകരണത്തിൽ മാത്രം. “Demo” എന്ന് അടയാളപ്പെടുത്തിയവ സാമ്പിൾ ഡാറ്റയാണ്.',
   },
 };
 

@@ -61,8 +61,14 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.date == request.resource.data.date
             && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.status == 'quoted')
         ));
-      allow delete: if isAdmin() || (signedIn() && resource.data.source == 'manual'
+      allow delete: if isAdmin() || (signedIn()
         && get(/databases/$(database)/documents/vendors/$(resource.data.venueId)).data.ownerId == uid());
+    }
+
+    // The owner's private booking register (phone, walk-in and HallHub bookings, payments).
+    match /register/{id} {
+      allow read, update, delete: if signedIn() && (resource.data.venueId == uid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.venueId == uid() && request.resource.data.ownerId == uid();
     }
 
     match /events/{id} {

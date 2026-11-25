@@ -239,3 +239,28 @@ export const SEED_REVIEWS = [
   { name: 'Fathima N.', district: 'Malappuram', text: 'Comparing hall rent, dining capacity and parking side by side made the choice easy.', rating: 5 },
   { name: 'Joseph & Mariya', district: 'Ernakulam', text: 'Negotiated the evening slot price in the app, and everything stayed in writing.', rating: 4 },
 ];
+
+// Demo register for the demo venue owner: past and upcoming bookings with payments, for reports.
+export function buildSeedRegister() {
+  const names = ['Abdul Rasheed', 'Suresh Menon', 'Fathima Beevi', 'Joseph Varghese', 'Anitha Nair', 'Muhammed Shafi', 'Lakshmi Pillai', 'Thomas Mathew', 'Shabana K', 'Rajesh Kumar', 'Sajitha P', 'Noushad A', 'Biju George', 'Haris M'];
+  const types = ['Wedding', 'Wedding', 'Reception', 'Engagement', 'Wedding', 'Birthday', 'Corporate Event', 'Wedding', 'Reception', 'Housewarming'];
+  const prices = { morning: 65000, evening: 55000, full: 105000 };
+  const register = []; const slots = [];
+  const d0 = new Date();
+  const offsets = [-150, -138, -121, -110, -95, -88, -72, -60, -47, -33, -21, -9, 12, 19, 33, 41];
+  offsets.forEach((off, i) => {
+    const d = new Date(d0.getTime() + off * 86400000).toISOString().slice(0, 10);
+    const slot = ['full', 'morning', 'evening'][i % 3];
+    const rent = prices[slot]; const extras = i % 4 === 0 ? 8000 : 0;
+    const past = off < 0;
+    const adv = Math.round(rent * 0.25);
+    const payments = [{ amount: adv, date: new Date(d0.getTime() + (off - 45) * 86400000).toISOString().slice(0, 10), mode: i % 2 ? 'UPI' : 'Cash', note: 'Advance' }];
+    if (past && i !== 9) payments.push({ amount: rent + extras - adv, date: d, mode: i % 3 ? 'Cash' : 'Bank transfer', note: 'Balance' });
+    const id = `reg_demo_${i}`;
+    register.push({ id, venueId: 'demo_vendor', ownerId: 'demo_vendor', date: d, slot, customerName: names[i % names.length], customerPhone: '9' + String(800000000 + i * 1234567).slice(0, 9),
+      eventType: types[i % types.length], guests: 400 + (i * 73) % 900, rent, extras, extrasNote: extras ? 'Generator & extra cleaning' : '', payments,
+      status: 'booked', source: i % 3 === 1 ? 'hallhub' : 'offline', notes: '', isDemo: true, createdAt: Date.now() + off * 86400000 - 50 * 86400000 });
+    ((s) => (s === 'full' ? ['morning', 'evening'] : [s]))(slot).forEach((h) => slots.push({ id: `demo_vendor_${d}_${h}`, venueId: 'demo_vendor', date: d, half: h, source: 'manual', registerId: id }));
+  });
+  return { register, slots };
+}
