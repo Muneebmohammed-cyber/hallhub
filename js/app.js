@@ -167,8 +167,8 @@ async function viewHome() {
   const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
     html: `
-    <section class="hero" style="background-image:${coverURL({ id: 'hero-hallhub-7', category: 'auditorium' })}"><div class="wrap">
-      <p class="lede-top">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'From Kasaragod to Thiruvananthapuram'}</p>
+    <section class="hero" style="background-image:${coverURL({ id: 'hero-3', category: 'auditorium' })}"><div class="wrap">
+      <p class="lede-top">${S.profile?.name ? t('welcome') + ', ' + esc(S.profile.name) : 'All 14 districts, one calendar'}</p>
       <h1>${t('tagline')}</h1>
       <p>See which halls are free on your date — morning, evening or full day — across all 14 districts.</p>
       <form class="search" id="homeSearch">
