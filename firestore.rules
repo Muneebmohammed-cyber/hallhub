@@ -1,0 +1,53 @@
+rules_version = '2';
+// Mangalyam — role-based access for customers, vendors and admins.
+// Admins are users whose /users/{uid}.role == 'admin' (set by hand in the Firebase console; nobody can grant it to themselves).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/users/$(uid())) && get(/databases/$(database)/documents/users/$(uid())).data.role == 'admin'; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (userId == uid() || isAdmin());
+      allow create: if signedIn() && userId == uid() && request.resource.data.role == 'customer';
+      allow update: if isAdmin() || (signedIn() && userId == uid() && (
+        !('role' in changed()) || (resource.data.role == 'customer' && request.resource.data.role == 'vendor')));
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if resource.data.status == 'approved' || (signedIn() && (resource.data.ownerId == uid() || isAdmin()));
+      allow create: if isAdmin() || (signedIn() && vendorId == uid() && request.resource.data.ownerId == uid()
+        && request.resource.data.status == 'pending' && request.resource.data.verified == false
+        && request.resource.data.featured == false && request.resource.data.isDemo == false);
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.ownerId == uid() && !changed().hasAny(['status', 'verified', 'featured', 'ownerId', 'rating', 'reviewCount', 'isDemo', 'views']))
+        || (signedIn() && changed().hasOnly(['views', 'updatedAt']) && request.resource.data.views == resource.data.views + 1);
+    }
+
+    match /enquiries/{id} {
+      allow read: if signedIn() && (resource.data.customerId == uid() || resource.data.vendorOwnerId == uid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.customerId == uid() && request.resource.data.status == 'enquiry'
+        && request.resource.data.vendorOwnerId == get(/databases/$(database)/documents/vendors/$(request.resource.data.vendorId)).data.ownerId;
+      allow update: if isAdmin() || (signedIn() && !changed().hasAny(['customerId', 'vendorId', 'vendorOwnerId']) && (
+        (resource.data.customerId == uid() && request.resource.data.status in ['negotiation', 'confirmed', 'closed'])
+        || (resource.data.vendorOwnerId == uid() && request.resource.data.status in ['quoted', 'declined'])));
+    }
+
+    match /quotations/{id} {
+      allow read: if signedIn() && (resource.data.customerId == uid() || resource.data.vendorOwnerId == uid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.vendorOwnerId == uid()
+        && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.vendorOwnerId == uid()
+        && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.customerId == request.resource.data.customerId;
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.customerId == uid() && changed().hasOnly(['status', 'customerNote', 'targetPrice', 'updatedAt'])
+            && request.resource.data.status in ['revision_requested', 'accepted', 'declined'])
+        || (signedIn() && resource.data.vendorOwnerId == uid() && changed().hasOnly(['status', 'updatedAt']) && request.resource.data.status == 'superseded');
+    }
+
+    match /events/{id} {
+      allow read, update, delete: if signedIn() && (resource.data.ownerId == uid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+    }
+  }
+}
