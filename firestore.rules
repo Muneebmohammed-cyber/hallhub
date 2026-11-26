@@ -31,7 +31,7 @@ service cloud.firestore {
         && request.resource.data.vendorOwnerId == get(/databases/$(database)/documents/vendors/$(request.resource.data.vendorId)).data.ownerId;
       allow update: if isAdmin() || (signedIn() && !changed().hasAny(['customerId', 'vendorId', 'vendorOwnerId']) && (
         (resource.data.customerId == uid() && request.resource.data.status in ['negotiation', 'confirmed', 'closed'])
-        || (resource.data.vendorOwnerId == uid() && request.resource.data.status in ['quoted', 'declined'])));
+        || (resource.data.vendorOwnerId == uid() && request.resource.data.status in ['quoted', 'declined', 'transferred'])));
     }
 
     match /quotations/{id} {
@@ -69,6 +69,24 @@ service cloud.firestore {
     match /register/{id} {
       allow read, update, delete: if signedIn() && (resource.data.venueId == uid() || isAdmin());
       allow create: if signedIn() && request.resource.data.venueId == uid() && request.resource.data.ownerId == uid();
+    }
+
+    // Public booking check: hall name, date, slot and the customer's initials only.
+    match /verifications/{code} {
+      allow read: if true;
+      allow create, update: if isAdmin() || (signedIn() && (
+        get(/databases/$(database)/documents/vendors/$(request.resource.data.venueId)).data.ownerId == uid()
+        || (request.resource.data.enquiryId is string && request.resource.data.enquiryId != ''
+            && get(/databases/$(database)/documents/enquiries/$(request.resource.data.enquiryId)).data.customerId == uid())));
+    }
+
+    // Dates a family has released for another family to take.
+    match /transfers/{enquiryId} {
+      allow read: if true;
+      allow create: if signedIn() && get(/databases/$(database)/documents/enquiries/$(enquiryId)).data.customerId == uid()
+        && request.resource.data.status == 'open';
+      allow update: if isAdmin() || (signedIn() && (resource.data.customerId == uid()
+        || get(/databases/$(database)/documents/vendors/$(resource.data.venueId)).data.ownerId == uid()));
     }
 
     match /events/{id} {

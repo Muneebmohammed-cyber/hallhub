@@ -161,6 +161,7 @@ export function buildSeedVendors() {
       slotPrices: { morning: m, evening: e, full: f }, startingPrice: Math.min(m, e), priceUnit: ' per slot',
       rating, reviewCount: reviews, featured, offer: i % 6 === 0 ? 'Weekday bookings 15% off' : '',
       charges: { electricityPerHour: [800, 1200, 1500, 2000][i % 4], cleaning: [0, 2500, 4000, 6000][i % 4], generator: [0, 3000, 5000][i % 3], gstPct: 18, perPlate: catering === 0 ? 0 : [380, 420, 480, 550][i % 4] },
+      monsoon: i % 5 === 4 ? 'road' : i % 7 === 6 ? 'unknown' : 'safe', rainPolicy: i % 3 === 0 ? 'Free date change if IMD issues a red alert for the district' : '',
       cancel: [{ freeDays: 90, refundPct: 100 }, { freeDays: 60, refundPct: 75 }, { freeDays: 30, refundPct: 50 }, { freeDays: 0, refundPct: 0 }][i % 4],
     };
   });

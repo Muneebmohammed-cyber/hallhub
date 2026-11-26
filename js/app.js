@@ -114,7 +114,7 @@ function vendorCard(v, avail) {
   const cat = catById(v.category);
   return `<a class="vcard" href="#/v/${v.id}">
     <div class="cover" style="${coverStyle(v)}">${v.portfolio?.[0] ? '' : `<div class="pattern"></div><div class="glyph">${cat?.icon || '✨'}</div>`}
-      <div class="row wrap-x">${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.featured ? '<span class="badge gold">★ Featured</span>' : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}${unclaimed(v) ? '<span class="badge">📍 Not on HallHub yet</span>' : ''}</div>
+      <div class="row wrap-x">${v.verified ? `<span class="badge">✔ ${t('verified')}</span>` : ''}${v.featured ? '<span class="badge gold">★ Featured</span>' : ''}${v.isDemo ? '<span class="badge demo">Demo</span>' : ''}${unclaimed(v) ? '<span class="badge">📍 Not on HallHub yet</span>' : ''}${v.monsoon === 'safe' ? '<span class="badge ok">Monsoon-ready</span>' : ''}</div>
     </div>
     <div class="vbody">
       <div class="vname">${esc(v.businessName)}</div>
@@ -168,6 +168,7 @@ async function viewHome() {
   const services = vs.filter((v) => !isVenue(v)).slice(0, 8);
   const corridor = vs.filter((v) => v.corridor === 'chavakkad-ponnani');
   const freed = await freedAlerts();
+  const released = (await openTransfers()).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
   const vById = Object.fromEntries(vs.map((v) => [v.id, v]));
   const types = CATEGORIES.filter((c) => c.group === 'venues');
   return {
@@ -194,6 +195,9 @@ async function viewHome() {
       ${corridor.length ? `<section class="section"><div class="section-head"><h2>Chavakkad – Ponnani highway</h2><a href="#/explore?corridor=chavakkad-ponnani">${t('viewAll')} (${corridor.length})</a></div>
         <p class="small muted" style="margin:-4px 0 10px">Real auditoriums along NH66 and the Guruvayur–Ponnani road, from Blangad to Ponnani.</p>
         <div class="grid">${corridor.slice(0, 4).map((v) => vendorCard(v)).join('')}</div></section>` : ''}
+      ${released.length ? `<section class="section"><div class="section-head"><h2>Dates released by other families</h2></div>
+        <p class="small muted" style="margin:-8px 0 10px">Popular halls on busy dates, offered by families who changed plans.</p>
+        <div class="card">${released.map((x) => `<a class="list-item" href="#/enquire/${x.venueId}?date=${x.date}&slot=${x.slot}&transfer=${x.enquiryId}" style="color:var(--ink)"><div><b>${esc(x.venueName)}</b><div class="small muted">${fmtDate(x.date)} · ${esc(slotLabel(x.slot))}</div></div><span class="btn sm ghost">Request</span></a>`).join('')}</div></section>` : ''}
       <section class="section"><div class="section-head"><h2>${t('featured')}</h2><a href="#/explore?sort=popular">${t('viewAll')}</a></div>
         <div class="grid">${featured.map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('destinations')}</h2></div>
@@ -205,6 +209,7 @@ async function viewHome() {
         <div class="grid" style="margin-top:10px">${services.slice(0, 4).map((v) => vendorCard(v)).join('')}</div></section>
       <section class="section"><div class="section-head"><h2>${t('reviewsTitle')}</h2></div>
         <div class="grid">${SEED_REVIEWS.map((r) => `<div class="card"><div class="stars">${'★'.repeat(r.rating)}</div><p style="font-family:var(--serif);font-size:1.15rem;margin:.4em 0">“${esc(r.text)}”</p><div class="small muted">${esc(r.name)} · ${esc(r.district)} <span class="badge demo">Demo</span></div></div>`).join('')}</div></section>
+      <section class="section card stack"><h2 style="margin:0">Someone asking you to pay for a booking?</h2><p class="muted" style="margin:0">Check the HallHub booking code before you pay. Fake booking messages with payment links and QR codes are common.</p><a class="btn ghost" href="#/verify">Check a booking code</a></section>
       <section class="section card center stack"><h2>Own an auditorium or hall?</h2><p class="muted">List it free, manage your booking calendar and send quotations from one dashboard.</p><a class="btn gold" href="#/vendor/register">List your venue</a></section>
     </div>`,
     mount() {
@@ -307,6 +312,7 @@ async function viewVendor(id) {
   const venue = isVenue(v);
   const taken = venue ? takenMap(await venueSlots(id)) : {};
   const demand = venue ? await demandMap(v.district) : null;
+  const tfs = venue ? await openTransfers(id) : [];
   const pr = planPrefs(); const inCompare = compareList().includes(id);
   let ym = (pr.date && pr.date >= today() ? pr.date : today()).slice(0, 7); let pickDate = pr.date && pr.date >= today() ? pr.date : ''; let pickSlot = '';
   const wa = v.whatsapp ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Hi ${v.businessName}, I found you on HallHub and would like to enquire about your services.`)}` : '';
@@ -327,7 +333,7 @@ async function viewVendor(id) {
       <div class="card"><h3>${t('about')}</h3><p style="margin:0">${esc(v.description)}</p>
         ${v.traditions?.length ? `<p class="small muted" style="margin:.6em 0 0">Experienced with: ${v.traditions.map(esc).join(', ')} ceremonies</p>` : ''}</div>
       ${venue ? `<div class="card stack"><h3 style="margin:0">Capacity & facilities</h3>${venueFacts(v).replace('class="facts"', 'class="facts big"')}
-        <table class="cmp"><tr><td>Hall type</td><td>${esc(catName(v.category))}</td></tr><tr><td>Air-conditioning</td><td>${esc(v.ac)}</td></tr><tr><td>Catering</td><td>${esc(v.catering)}</td></tr><tr><td>Bridal / green rooms</td><td>${v.rooms || 0}</td></tr></table>
+        <table class="cmp"><tr><td>Hall type</td><td>${esc(catName(v.category))}</td></tr><tr><td>Air-conditioning</td><td>${esc(v.ac)}</td></tr><tr><td>Catering</td><td>${esc(v.catering)}</td></tr><tr><td>Bridal / green rooms</td><td>${v.rooms || 0}</td></tr>${v.monsoon ? `<tr><td>Monsoon</td><td>${esc(MONSOON[v.monsoon])} ${monsoonBadge(v)}${v.rainPolicy ? `<div class="small muted">${esc(v.rainPolicy)}</div>` : ''}</td></tr>` : ''}</table>
         <div class="amen">${(v.amenities || []).map((a) => `<span>✓ ${esc(a)}</span>`).join('')}</div></div>
       <div class="card"><h3>Hall rent</h3><table class="cmp">${SLOTS.map((x) => `<tr><td>${nameOf(x)} <span class="small muted">${x.time}</span></td><td class="price">${v.slotPrices?.[x.id] ? money(v.slotPrices[x.id]) : '—'}</td></tr>`).join('')}</table>
         <p class="small muted" style="margin:.6em 0 0">Rent for the hall only. Catering, decoration and electricity beyond the slot are quoted separately.</p></div>
@@ -363,6 +369,7 @@ async function viewVendor(id) {
         $('#slotBox').innerHTML = pickDate ? `<div class="stack"><b>${fmtDate(pickDate)}</b><div class="slot-pick">${SLOTS.map((x) => { const ok = slotFree(tk, x.id); return `<button type="button" class="slot-opt ${pickSlot === x.id ? 'on' : ''}" data-slot="${x.id}" ${ok ? '' : 'disabled'}><b>${nameOf(x)}</b><span class="small muted">${x.time}</span><br><span class="price">${ok ? money(v.slotPrices?.[x.id]) : t('booked')}</span></button>`; }).join('')}</div>
           ${pickSlot ? `<a class="btn block" href="#/enquire/${id}?date=${pickDate}&slot=${pickSlot}">${t('bookSlot')} · ${slotName(pickSlot)}</a>` : '<p class="small muted" style="margin:0">Choose a slot.</p>'}
           ${(demand[pickDate] || 0) >= 0.3 ? '<p class="small" style="margin:0;color:var(--warn)">This is a busy date in the district. Halls are filling up, so request soon.</p>' : ''}
+          ${tfs.filter((x) => x.date === pickDate).map((x) => `<div class="msg" style="background:#F6EBD2"><b>Released by another family:</b> ${esc(slotLabel(x.slot))}${x.note ? ` · <span class="muted">${esc(x.note)}</span>` : ''}<br><a class="btn sm" style="margin-top:8px" href="#/enquire/${id}?date=${x.date}&slot=${x.slot}&transfer=${x.enquiryId}">Request this date</a></div>`).join('')}
           ${tk.length ? `<div class="msg stack" style="margin-top:4px"><div class="row between wrap-x"><b class="small">${tk.length >= 2 ? 'Fully booked on this date' : 'Partly booked on this date'}</b><button type="button" class="btn sm ghost" data-act="alert">Tell me if it frees up</button></div><div id="pb" class="small muted">Looking for similar halls free that day…</div></div>` : ''}</div>` : '<p class="small muted" style="margin:0">Tap a date to see free slots.</p>';
         if (tk.length) planB(v, pickDate, tk.length >= 2 ? 'full' : (tk.includes('morning') ? 'evening' : 'morning')).then((alts) => {
           const el = $('#pb'); if (!el) return;
@@ -400,6 +407,8 @@ async function viewEnquire(vendorId, params) {
   const venue = isVenue(v);
   const taken = venue ? takenMap(await venueSlots(vendorId)) : {};
   const pDate = params.get('date') || ''; const pSlot = params.get('slot') || 'full';
+  const tf = params.get('transfer') ? await db.get('transfers', params.get('transfer')) : null;
+  const tfOpen = tf && tf.status === 'open' && tf.venueId === vendorId ? tf : null;
   return {
     html: `<div class="wrap" style="padding-top:16px"><div class="card stack">
       <h2>${venue ? 'Request to book' : t('requestQuote')}</h2><p class="muted small" style="margin:0">to <b>${esc(v.businessName)}</b> · ${esc(catName(v.category))}</p>
@@ -426,6 +435,8 @@ async function viewEnquire(vendorId, params) {
         if (!venue) return true;
         const d = $('#enq [name=date]').value; const sl = $('#enq [name=slot]').value; const box = $('#availMsg');
         if (!d) { box.innerHTML = ''; return true; }
+        const viaTransfer = tfOpen && tfOpen.date === d && halvesOf(sl).every((h) => halvesOf(tfOpen.slot).includes(h));
+        if (viaTransfer) { $('#availMsg').innerHTML = `<div class="msg" style="background:#F6EBD2">This date was released by another family. The hall will confirm the transfer and send you a quotation.${tfOpen.note ? `<br><span class="muted">Their note: ${esc(tfOpen.note)}</span>` : ''}</div>`; return true; }
         const ok = slotFree(taken[d] || [], sl);
         const g = Number($('#enq [name=guests]').value || 0);
         box.innerHTML = `<div class="msg" style="background:${ok ? '#e3f1e8' : '#f8e1df'}">${ok ? `✔ ${slotLabel(sl)} on ${fmtDate(d)} is free · hall rent ${money(v.slotPrices?.[sl])}` : `✕ ${slotLabel(sl)} on ${fmtDate(d)} is already booked. Pick another slot or date.`}${g > v.seating ? `<br>⚠ ${g} guests is more than the ${v.seating}-seat capacity.` : ''}</div>`;
@@ -441,6 +452,7 @@ async function viewEnquire(vendorId, params) {
         try {
           const f = formData(e.target);
           if (venue) { f.district = v.district; f.location = `${v.businessName}, ${v.town}`; f.packageId = f.slot; }
+          if (tfOpen && tfOpen.date === f.date) f.transferOf = tfOpen.enquiryId;
           let eventId = f.eventId;
           if (!eventId) eventId = await db.add('events', { ownerId: S.user.uid, name: `${f.eventType} · ${fmtDate(f.date)}`, type: f.eventType, tradition: f.tradition, date: f.date, district: f.district, venue: f.location, guests: Number(f.guests) || 0, budget: 0 });
           const k = (v.packages || []).find((x) => x.id === f.packageId);
@@ -449,7 +461,7 @@ async function viewEnquire(vendorId, params) {
             vendorId: v.id, vendorOwnerId: v.ownerId, vendorName: v.businessName, category: v.category,
             eventId, eventType: f.eventType, tradition: f.tradition, date: f.date, district: f.district, location: f.location,
             guests: Number(f.guests) || 0, packageId: f.packageId || '', packageName: venue ? `Hall rent · ${slotLabel(f.slot)}` : (k ? k.name : 'Custom quotation'), slot: venue ? f.slot : '', isVenue: venue, listPrice: venue ? Number(v.slotPrices?.[f.slot] || 0) : (k ? k.price : 0), budget: Number(f.budget) || 0,
-            requirements: f.requirements, images: imgs, status: 'enquiry', messages: [],
+            requirements: f.requirements, images: imgs, status: 'enquiry', messages: [], transferOf: f.transferOf || '',
           });
           toast('Enquiry sent'); go('#/enquiry/' + id);
         } catch (err) { toast(err.message); $('#enqBtn').disabled = false; }
@@ -499,6 +511,25 @@ async function viewEnquiry(id) {
     <form id="revise" class="stack" style="display:none"><label>What would you like changed?</label><textarea name="note" required placeholder="e.g. Can you include a second photographer and reduce the price?"></textarea>
     <label>Target price (₹, optional)</label><input type="number" name="target" min="0"><button class="btn">Send revision request</button></form>` : '';
   const vendorCanQuote = isVendor && open && (!latest || latest.status === 'revision_requested' || e.status === 'enquiry');
+  const confirmed = e.status === 'confirmed';
+  const code = bookingCode(id);
+  const myTransfer = e.isVenue && confirmed ? await db.get('transfers', id) : null;
+  const orig = isVendor && e.transferOf ? await db.get('enquiries', e.transferOf) : null;
+  const vRec = e.isVenue && !isVendor && confirmed && isMonsoon(e.date) ? await db.get('vendors', e.vendorId) : null;
+  const protect = confirmed || e.status === 'transferred' ? `<div class="card stack"><div class="row between wrap-x"><h3 style="margin:0">Your booking is protected</h3><span class="badge ok">${code}</span></div>
+      <p class="small" style="margin:0">The slot is locked in HallHub's calendar and can't be sold to anyone else. Share the code with family; anyone can check it at HallHub's verify page.</p>
+      <div class="row wrap-x"><a class="btn sm" href="#/agreement/${id}">Booking agreement</a><a class="btn sm ghost" href="#/verify/${code}">Check code</a></div></div>
+    ${vRec ? `<div class="card stack"><div class="row between wrap-x"><h3 style="margin:0">Monsoon plan</h3>${monsoonBadge(vRec)}</div>
+      <p class="small" style="margin:0">Your date falls in the monsoon months. ${esc(MONSOON[vRec.monsoon] || 'The hall has not said whether it floods')}.${vRec.rainPolicy ? ` Hall's rain policy: ${esc(vRec.rainPolicy)}.` : ' Ask the hall what happens if the area floods.'}</p>
+      <div id="rainB" class="small muted">Looking for backup halls free on your date…</div></div>` : ''}
+    ${!isVendor && confirmed && e.isVenue && e.date >= today() ? (myTransfer?.status === 'open'
+      ? `<div class="card stack"><h3 style="margin:0">Your date is listed for transfer</h3><p class="small" style="margin:0">Families searching ${fmtDate(e.date)} can see it and request it. When one does, the hall releases your slot to them and refunds your advance under its terms.</p><button class="btn sm ghost" data-act="withdrawT">Withdraw the offer</button></div>`
+      : `<details class="card"><summary class="small" style="cursor:pointer;font-weight:600">Can't use this date?</summary><div class="stack" style="margin-top:10px"><p class="small" style="margin:0">Many halls refund the advance only when another family takes the date. Offer your date here and HallHub shows it to families searching for ${fmtDate(e.date)}.</p>
+        <input id="tNote" placeholder="Note for the next family (optional)"><button class="btn sm" data-act="offerT">Offer my date to another family</button></div></details>`) : ''}
+    ${!isVendor && (confirmed || open) ? scamShield() : ''}` : '';
+  const transferCard = orig ? `<div class="card stack" style="box-shadow:inset 0 0 0 1.5px var(--warn),var(--lift)"><h3 style="margin:0">Transfer request</h3>
+      <p class="small" style="margin:0">This family wants the date ${esc(orig.customerName)} offered for transfer (booking ${bookingCode(orig.id)}). ${orig.status === 'confirmed' ? 'Release the original booking to free the slot, then send your quotation as usual. Settle the first family\'s advance under your cancellation terms.' : 'The original booking has been released.'}</p>
+      ${orig.status === 'confirmed' ? '<button class="btn sm" data-act="releaseT">Release the original booking</button>' : ''}</div>` : '';
   return {
     html: `<div class="wrap stack" style="padding-top:16px">
       <a href="${isVendor ? '#/vendor/enquiries' : isAdmin ? '#/admin/enquiries' : '#/bookings'}" class="small">← Back</a>
@@ -509,10 +540,12 @@ async function viewEnquiry(id) {
         <tr><td>Location</td><td>${esc(e.location)}, ${esc(distName(e.district))}</td></tr><tr><td>Guests</td><td>${e.guests || '—'}</td></tr>
         <tr><td>Package</td><td>${esc(e.packageName)}</td></tr><tr><td>Budget</td><td>${e.budget ? money(e.budget) : '—'}</td></tr>
         ${isVendor || isAdmin ? `<tr><td>Customer phone</td><td>${esc(e.customerPhone || '—')}</td></tr>` : ''}</table>
-        ${slotTakenByOther ? `<div class="msg" style="background:#f8e1df">✕ This slot has since been booked or blocked. ${isVendor ? 'Decline, or suggest another date in your message.' : 'Ask the venue for another date or slot.'}</div>` : ''}
+        ${slotTakenByOther && !e.transferOf ? `<div class="msg" style="background:#f8e1df">✕ This slot has since been booked or blocked. ${isVendor ? 'Decline, or suggest another date in your message.' : 'Ask the venue for another date or slot.'}</div>` : ''}
+        ${e.transferOf ? '<div class="msg">This request is for a date released by another family.</div>' : ''}
         <div class="msg"><b>Requirements:</b> ${esc(e.requirements)}</div>
         ${e.images?.length ? `<div class="thumbs">${e.images.map((s) => `<img src="${s}">`).join('')}</div>` : ''}
       </div>
+      ${protect}${transferCard}
       ${e.messages?.length ? `<div class="card stack"><h3>Negotiation log</h3>${e.messages.map((m) => `<div class="msg"><b>${m.from === 'vendor' ? esc(e.vendorName) : esc(e.customerName)}:</b> ${esc(m.text)} <span class="small muted">· ${new Date(m.at).toLocaleString('en-IN')}</span></div>`).join('')}</div>` : ''}
       ${vendorCanQuote ? `<div class="card stack"><h3>${latest ? 'Send revised quotation' : 'Send quotation'}</h3>
         <form id="qform" class="form-grid">
@@ -554,8 +587,25 @@ async function viewEnquiry(id) {
         await db.update('enquiries', id, { status: 'negotiation', messages: [...(e.messages || []), { from: 'customer', text: f.note + (f.target ? ` (target ${money(f.target)})` : ''), at: Date.now() }] });
         toast('Revision requested'); render();
       };
+      if ($('#rainB')) planB({ id: e.vendorId, district: e.district, seating: (e.guests || 0) / 0.8 }, e.date, e.slot || 'full').then((alts) => {
+        const el = $('#rainB'); if (!el) return;
+        el.innerHTML = alts.length ? `<b style="color:var(--ink)">Backup halls free on your date</b>${alts.map((a) => `<a class="list-item" href="#/v/${a.id}" style="color:var(--ink);padding:8px 0"><span>${esc(a.businessName)}<span class="muted"> · ${esc(a.town)}</span></span>${monsoonBadge(a)}</a>`).join('')}` : 'No other free halls nearby on your date right now.';
+      });
       $('#view').onclick = async (ev) => {
         const b = ev.target.closest('[data-act]'); if (!b) return;
+        if (b.dataset.act === 'offerT') {
+          await db.set('transfers', id, { enquiryId: id, venueId: e.vendorId, venueName: e.vendorName, date: e.date, slot: e.slot, customerId: e.customerId, note: $('#tNote').value || '', status: 'open', createdAt: Date.now() });
+          await db.update('enquiries', id, { transfer: 'open' }); toast('Your date is now offered to other families'); render();
+        }
+        if (b.dataset.act === 'withdrawT') { await db.update('transfers', id, { status: 'withdrawn' }); await db.update('enquiries', id, { transfer: '' }); toast('Offer withdrawn'); render(); }
+        if (b.dataset.act === 'releaseT' && confirm('Release the original booking? Its slot becomes free for this family.')) {
+          for (const h of halvesOf(orig.slot)) await db.remove('slots', `${orig.vendorId}_${orig.date}_${h}`).catch(() => {});
+          await db.update('enquiries', orig.id, { status: 'transferred', transferredTo: id, transferredAt: Date.now() });
+          await db.update('transfers', orig.id, { status: 'done', takenBy: id }).catch(() => {});
+          await db.update('register', 'hh_' + orig.id, { status: 'cancelled', notes: 'Transferred to another family' }).catch(() => {});
+          await issueVerification(bookingCode(orig.id), { venueId: orig.vendorId, venueName: orig.vendorName, enquiryId: orig.id, date: orig.date, slot: orig.slot || '', customerInitials: initials(orig.customerName), status: 'transferred', source: 'hallhub' });
+          slotCache = null; toast('Original booking released'); render();
+        }
         if (b.dataset.act === 'showRevise') rv.style.display = 'block';
         if (b.dataset.act === 'accept') {
           if (latest.validUntil && latest.validUntil < today()) return toast('This quotation has expired. Request a revision instead.');
@@ -565,6 +615,7 @@ async function viewEnquiry(id) {
           }
           await db.update('quotations', latest.id, { status: 'accepted' });
           await db.update('enquiries', id, { status: 'confirmed', acceptedQuoteId: latest.id, finalAmount: Number(latest.total) + Number(latest.additional || 0), advanceDue: Number(latest.advance), confirmedAt: Date.now() });
+          await issueVerification(bookingCode(id), { venueId: e.vendorId, venueName: e.vendorName, enquiryId: id, date: e.date, slot: e.slot || '', customerInitials: initials(e.customerName), status: 'confirmed', source: 'hallhub' });
           slotCache = null; toast('Booking confirmed 🎉'); render();
         }
         if (b.dataset.act === 'closeEnq' && confirm('Decline this quotation and close the enquiry?')) { await db.update('enquiries', id, { status: 'closed' }); await db.update('quotations', latest.id, { status: 'declined' }); render(); }
@@ -881,6 +932,8 @@ async function viewVendorServices() {
           <div><label>In-house food per plate (₹, 0 if none)</label><input type="number" name="c_plate" min="0" value="${v.charges?.perPlate || 0}"></div>
           <div><label>Refund if cancelled (% of advance)</label><input type="number" name="x_pct" min="0" max="100" value="${v.cancel?.refundPct ?? 0}"></div>
           <div><label>…if cancelled at least (days before)</label><input type="number" name="x_days" min="0" value="${v.cancel?.freeDays ?? 0}"></div>
+          <div><label>Flooding in past monsoons</label><select name="monsoon">${Object.entries(MONSOON).map(([k, l]) => `<option value="${k}" ${k === (v.monsoon || 'unknown') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+          <div><label>Rain policy for customers</label><input name="rainPolicy" value="${esc(v.rainPolicy || '')}" placeholder="Free date change on an IMD red alert"></div>
           <div class="full"><label>Facilities</label><div class="row wrap-x">${AMENITIES.map((a) => `<label class="chip" style="margin:0"><input type="checkbox" name="amen" value="${a}" ${(v.amenities || []).includes(a) ? 'checked' : ''} style="width:auto"> ${a}</label>`).join('')}</div></div>
         </div>` : `<div class="card stack"><div class="row between"><h3 style="margin:0">${t('packages')}</h3><button type="button" class="btn sm" data-act="addPkg">+ Add package</button></div><div id="pkgs" class="stack">${(v.packages || []).map(pkgRow).join('')}</div></div>`}
         <div class="card form-grid">
@@ -914,7 +967,7 @@ async function viewVendorServices() {
         const slotPrices = venue ? Object.fromEntries(SLOTS.map((x) => [x.id, Number(fd.get('price_' + x.id)) || 0])) : null;
         const venuePatch = venue ? { category: fd.get('category'), seating: Number(fd.get('seating')), dining: Number(fd.get('dining')) || 0, parking: Number(fd.get('parking')) || 0, rooms: Number(fd.get('rooms')) || 0, ac: fd.get('ac'), catering: fd.get('catering'), amenities: fd.getAll('amen'), slotPrices,
           charges: { electricityPerHour: Number(fd.get('c_elec')) || 0, cleaning: Number(fd.get('c_clean')) || 0, generator: Number(fd.get('c_gen')) || 0, gstPct: Number(fd.get('c_gst')) || 0, perPlate: Number(fd.get('c_plate')) || 0 },
-          cancel: { refundPct: Number(fd.get('x_pct')) || 0, freeDays: Number(fd.get('x_days')) || 0 }, startingPrice: Math.min(...[slotPrices.morning, slotPrices.evening, slotPrices.full].filter((n) => n > 0).concat([]).slice(0, 3), ...([slotPrices.morning, slotPrices.evening, slotPrices.full].some((n) => n > 0) ? [] : [0])), priceUnit: ' per slot' } : {};
+          cancel: { refundPct: Number(fd.get('x_pct')) || 0, freeDays: Number(fd.get('x_days')) || 0 }, monsoon: fd.get('monsoon'), rainPolicy: fd.get('rainPolicy'), startingPrice: Math.min(...[slotPrices.morning, slotPrices.evening, slotPrices.full].filter((n) => n > 0).concat([]).slice(0, 3), ...([slotPrices.morning, slotPrices.evening, slotPrices.full].some((n) => n > 0) ? [] : [0])), priceUnit: ' per slot' } : {};
         const patch = { packages, startingPrice: prices.length ? Math.min(...prices) : 0, priceUnit: cheapest?.unit || '', ...venuePatch, description: fd.get('description'), policies: fd.get('policies'), offer: fd.get('offer'), videos: fd.get('videos').split(',').map((x) => x.trim()).filter(Boolean), traditions: fd.getAll('trad'), blockedDates: blocked, portfolio };
         try { await db.update('vendors', S.user.uid, patch); Object.assign(S.vendor, patch); vendorCache = null; toast('Saved'); } catch (err) { toast(err.message.includes('size') ? 'Images too large — remove one and try again' : err.message); }
       };
@@ -979,6 +1032,83 @@ async function viewAdmin(tab) {
 function dupes(vs) {
   const by = {}; vs.forEach((v) => { const k = (v.phone || '').replace(/\D/g, ''); if (k) (by[k] = by[k] || []).push(v); });
   return Object.values(by).filter((g) => g.length > 1).map((g) => `<div class="list-item"><div class="small">${g.map((v) => esc(v.businessName)).join(' · ')}</div><span class="badge warn">same phone</span></div>`).join('');
+}
+
+// =====================================================================
+// BOOKING PROTECTION — agreement, verification code, date transfer, scam shield, monsoon
+// =====================================================================
+const bookingCode = (id) => 'HH-' + String(id).replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase();
+const verifyLink = (code) => `${location.origin}${location.pathname}#/verify/${code}`;
+const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + '.').join(' ') || 'Customer';
+async function issueVerification(code, data) { await db.set('verifications', code, { code, ...data, issuedAt: Date.now() }).catch(() => {}); }
+const scamShield = () => `<div class="shield"><b>Pay only inside HallHub or at the hall's counter.</b> HallHub and verified halls never ask you to pay through a link, QR code or bank account sent on WhatsApp or by phone. Unsure about a booking? <a href="#/verify">Check its booking code</a>.</div>`;
+const MONSOON = { safe: 'No flooding reported in past monsoons', road: 'Approach road can flood in heavy rain', unknown: 'Not yet checked' };
+const isMonsoon = (d) => { const m = Number(String(d || '').slice(5, 7)); return m >= 6 && m <= 9; };
+function monsoonBadge(v) { if (!isVenue(v) || !v.monsoon) return ''; return v.monsoon === 'safe' ? '<span class="badge ok">Monsoon-ready</span>' : v.monsoon === 'road' ? '<span class="badge warn">Road may flood</span>' : ''; }
+function refundRows(v, advance) {
+  const c = v?.cancel;
+  const rows = (!c || !c.refundPct || !c.freeDays) ? [['After booking', `Advance of ${money(advance)} is not refunded`]]
+    : [[`${c.freeDays} or more days before the event`, `${c.refundPct}% of the advance refunded (${money(Math.round((advance * c.refundPct) / 100))})`], [`Less than ${c.freeDays} days before`, 'Advance not refunded']];
+  rows.push(['If another family takes your date through HallHub', 'Ask the hall to refund your advance; the transfer is recorded here']);
+  rows.push(['If the hall cancels', 'Everything you paid is refunded, and HallHub suggests free halls for your date']);
+  return rows;
+}
+
+async function viewVerify(code) {
+  code = String(code || '').toUpperCase();
+  const rec = code ? await db.get('verifications', code) : null;
+  const ok = rec && rec.status === 'confirmed';
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px"><h1 style="margin:0">Check a booking</h1>
+      <p class="muted" style="margin:0">Every HallHub booking has a code like HH-4F9K2A. Check it here before you pay anyone.</p>
+      <form id="vf" class="card row"><input name="code" placeholder="HH-XXXXXX" value="${esc(code)}" style="text-transform:uppercase" required><button class="btn">Check</button></form>
+      ${!code ? '' : rec ? `<div class="card stack" style="box-shadow:inset 0 0 0 1.5px ${ok ? 'var(--leaf)' : 'var(--warn)'},var(--lift)">
+        <div class="row between wrap-x"><h3 style="margin:0">${ok ? 'Genuine HallHub booking' : 'This booking is no longer active'}</h3>${ok ? '<span class="badge ok">✓ Verified</span>' : `<span class="badge warn">${esc(rec.status)}</span>`}</div>
+        <table class="cmp"><tr><td>Code</td><td><b>${esc(rec.code)}</b></td></tr><tr><td>Venue</td><td>${esc(rec.venueName)}</td></tr><tr><td>Date</td><td>${fmtDate(rec.date)}${rec.slot ? ' · ' + esc(slotLabel(rec.slot)) : ''}</td></tr><tr><td>Booked by</td><td>${esc(rec.customerInitials)}</td></tr></table>
+        <p class="small muted" style="margin:0">Pay any balance only through HallHub or at the hall's own counter against a receipt.</p></div>`
+      : `<div class="card stack" style="box-shadow:inset 0 0 0 1.5px var(--bad),var(--lift)"><h3 style="margin:0;color:var(--bad)">No booking found with this code</h3>
+        <p class="small" style="margin:0">Don't pay anyone who gave you this code. Check it for typing mistakes, or ask the hall to show the booking in their HallHub register.</p></div>`}
+    </div>`,
+    mount() { $('#vf').onsubmit = (e) => { e.preventDefault(); go('#/verify/' + formData(e.target).code.trim().toUpperCase()); }; },
+  };
+}
+
+async function viewAgreement(id) {
+  if (!S.user) return { html: needLogin() };
+  const e = await db.get('enquiries', id);
+  if (!e || !['confirmed', 'transferred'].includes(e.status) || !(e.customerId === S.user.uid || e.vendorOwnerId === S.user.uid || role() === 'admin')) return { html: '<div class="wrap empty">Agreement not found.</div>' };
+  const [v, q] = await Promise.all([db.get('vendors', e.vendorId), e.acceptedQuoteId ? db.get('quotations', e.acceptedQuoteId) : null]);
+  const code = bookingCode(id); const total = Number(e.finalAmount || 0); const adv = Number(e.advanceDue || 0);
+  const c = v?.charges || {};
+  const text = `HallHub booking agreement ${code}\n${e.vendorName}\n${fmtDate(e.date)}${e.slot ? ', ' + slotLabel(e.slot) : ''}\nTotal ${money(total)}, advance ${money(adv)}, balance ${money(total - adv)}\nCheck it: ${verifyLink(code)}`;
+  return {
+    html: `<div class="wrap stack" style="padding-top:16px">
+      <div class="row between no-print"><a href="#/enquiry/${id}" class="small">← Booking</a><div class="row"><button class="btn sm ghost" data-act="print">Print / Save PDF</button><a class="btn sm green" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Share</a></div></div>
+      <div class="card receipt stack agreement">
+        <div class="row between" style="align-items:flex-start"><div><h2 style="margin:0">Booking agreement</h2><div class="small muted">Recorded on HallHub</div></div><div style="text-align:right"><b>${code}</b><div class="small muted">${e.confirmedAt ? new Date(e.confirmedAt).toLocaleDateString('en-IN') : ''}</div></div></div>
+        ${e.status === 'transferred' ? '<div class="msg" style="background:#F6EBD2">This booking was transferred to another family and is no longer active.</div>' : ''}
+        <table class="cmp"><tr><td>Hall</td><td><b>${esc(e.vendorName)}</b>${v?.address ? '<br>' + esc(v.address) : ''}${v?.phone ? '<br>' + esc(v.phone) : ''}${v?.gst ? '<br>GSTIN ' + esc(v.gst) : ''}</td></tr>
+          <tr><td>Booked by</td><td>${esc(e.customerName)}${e.customerPhone ? ' · ' + esc(e.customerPhone) : ''}</td></tr>
+          <tr><td>Event</td><td>${esc(e.eventType)} · ${fmtDate(e.date)}${e.slot ? ' · ' + esc(slotLabel(e.slot)) : ''}${e.guests ? ' · ' + e.guests + ' guests' : ''}</td></tr></table>
+        <h3 style="margin:6px 0 0">Charges</h3>
+        <table class="cmp"><tr><td>${esc(q?.packageName || e.packageName)}</td><td>${money(q?.total ?? total)}</td></tr>${q?.additional ? `<tr><td>Additional${q.additionalNote ? ' · ' + esc(q.additionalNote) : ''}</td><td>${money(q.additional)}</td></tr>` : ''}
+          <tr><td><b>Total agreed</b></td><td><b>${money(total)}</b></td></tr><tr><td>Advance</td><td>${money(adv)}</td></tr><tr><td><b>Balance</b></td><td><b>${money(total - adv)}</b></td></tr>
+          ${c.electricityPerHour ? `<tr><td>Overtime beyond the slot</td><td>${money(c.electricityPerHour)} per hour</td></tr>` : ''}${c.cleaning ? `<tr><td>Cleaning (if not in total)</td><td>${money(c.cleaning)}</td></tr>` : ''}${c.generator ? `<tr><td>Generator (if used)</td><td>${money(c.generator)}</td></tr>` : ''}</table>
+        ${q?.inclusions?.length || q?.exclusions?.length ? `<table class="cmp"><tr><td>Included</td><td>${(q.inclusions || []).map(esc).join('<br>') || '—'}</td></tr><tr><td>Not included</td><td>${(q.exclusions || []).map(esc).join('<br>') || '—'}</td></tr></table>` : ''}
+        <h3 style="margin:6px 0 0">Cancellation and refunds</h3>
+        <table class="cmp">${refundRows(v, adv).map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</table>
+        ${v?.monsoon || v?.rainPolicy ? `<h3 style="margin:6px 0 0">Monsoon</h3><table class="cmp"><tr><td>Flooding</td><td>${esc(MONSOON[v.monsoon] || 'Not stated')}</td></tr>${v.rainPolicy ? `<tr><td>Hall's rain policy</td><td>${esc(v.rainPolicy)}</td></tr>` : ''}</table>` : ''}
+        <p class="small" style="margin:0">The hall sent quotation ${q ? 'version ' + q.version : ''} through HallHub and the customer accepted it on ${e.confirmedAt ? new Date(e.confirmedAt).toLocaleString('en-IN') : '—'}. The slot is locked in HallHub's calendar, so it cannot be sold to anyone else.</p>
+        <p class="small muted" style="margin:0">Anyone can check this booking at ${esc(verifyLink(code))}</p>
+      </div></div>`,
+    mount() { $('#view').onclick = (ev) => { if (ev.target.closest('[data-act=print]')) window.print(); }; },
+  };
+}
+
+// Released dates: a family that can't use its date lists it; another family can take it.
+async function openTransfers(venueId) {
+  const all = venueId ? await db.list('transfers', ['venueId', venueId]) : await db.list('transfers', ['status', 'open']);
+  return all.filter((x) => x.status === 'open' && x.date >= today());
 }
 
 // =====================================================================
@@ -1236,6 +1366,7 @@ async function viewRegister(params) {
             await db.set('register', id, { venueId: uid, ownerId: uid, date: pick, slot: d.slot, customerName: d.customerName, customerPhone: d.customerPhone, eventType: d.eventType, guests: Number(d.guests) || 0,
               rent: Number(d.rent) || 0, extras: Number(d.extras) || 0, extrasNote: '', payments: Number(d.advance) > 0 ? [{ amount: Number(d.advance), date: today(), mode: d.mode, note: 'Advance' }] : [],
               status: 'booked', source: 'offline', notes: d.notes, createdAt: Date.now() });
+            await issueVerification(bookingCode(id), { venueId: uid, venueName: v.businessName, date: pick, slot: d.slot, customerInitials: initials(d.customerName), status: 'confirmed', source: 'register' });
             toast('Booking saved'); go(`#/vendor/booking/${id}`);
           };
         }
@@ -1269,12 +1400,13 @@ async function viewRegisterEntry(id) {
   if (!r || r.venueId !== S.user.uid) return { html: '<div class="wrap empty">Booking not found.</div>' };
   const v = S.vendor;
   const total = regTotal(r), paid = regPaid(r), bal = total - paid;
-  const confirmText = `Dear ${r.customerName},\nYour booking at ${v.businessName} is confirmed.\nDate: ${fmtDate(r.date)}, ${slotLabel(r.slot)}\nEvent: ${r.eventType}\nTotal: ${money(total)}\nPaid: ${money(paid)}\nBalance: ${money(bal)}\nThank you.`;
+  const confirmText = `Dear ${r.customerName},\nYour booking at ${v.businessName} is confirmed.\nDate: ${fmtDate(r.date)}, ${slotLabel(r.slot)}\nEvent: ${r.eventType}\nTotal: ${money(total)}\nPaid: ${money(paid)}\nBalance: ${money(bal)}\nBooking code: ${r.enquiryId ? bookingCode(r.enquiryId) : bookingCode(id)} (check it at ${verifyLink(r.enquiryId ? bookingCode(r.enquiryId) : bookingCode(id))})\nThank you.`;
   const reminderText = `Dear ${r.customerName},\nA reminder that ${money(bal)} is pending for your booking at ${v.businessName} on ${fmtDate(r.date)}.\nThank you.`;
   return {
     html: `<div class="wrap stack" style="padding-top:16px">
       <a href="#/vendor/calendar?d=${r.date}&m=${r.date.slice(0, 7)}" class="small">← Register</a>
       <div class="card stack">
+        <div class="small muted">Booking code <b style="color:var(--ink)">${r.enquiryId ? bookingCode(r.enquiryId) : bookingCode(id)}</b> · customers can check it on HallHub</div>
         <div class="row between wrap-x"><h2 style="margin:0">${esc(r.customerName)}</h2>${r.status === 'cancelled' ? '<span class="badge bad">Cancelled</span>' : bal > 0 ? `<span class="badge warn">Due ${money(bal)}</span>` : '<span class="badge ok">Paid in full</span>'}</div>
         <table class="cmp"><tr><td>Date</td><td>${fmtDate(r.date)} · ${esc(slotLabel(r.slot))}</td></tr><tr><td>Event</td><td>${esc(r.eventType)}${r.guests ? ' · ' + r.guests + ' guests' : ''}</td></tr>
           <tr><td>Mobile</td><td>${r.customerPhone ? `<a href="tel:${esc(r.customerPhone)}">${esc(r.customerPhone)}</a>` : '—'}</td></tr><tr><td>Booked via</td><td>${r.source === 'hallhub' ? `HallHub${r.enquiryId ? ` · <a href="#/enquiry/${r.enquiryId}">view request</a>` : ''}` : 'Phone / walk-in'}</td></tr>
@@ -1302,7 +1434,9 @@ async function viewRegisterEntry(id) {
       $('#view').onclick = async (e) => {
         if (e.target.closest('[data-act=cancelBk]') && confirm('Cancel this booking and free the slot?')) {
           for (const h of halvesOf(r.slot)) await db.remove('slots', `${r.venueId}_${r.date}_${h}`).catch(() => {});
-          await db.update('register', id, { status: 'cancelled', cancelledAt: Date.now() }); toast('Booking cancelled'); render();
+          await db.update('register', id, { status: 'cancelled', cancelledAt: Date.now() });
+          await issueVerification(r.enquiryId ? bookingCode(r.enquiryId) : bookingCode(id), { venueId: r.venueId, venueName: v.businessName, enquiryId: r.enquiryId || '', date: r.date, slot: r.slot, customerInitials: initials(r.customerName), status: 'cancelled', source: r.source });
+          toast('Booking cancelled'); render();
         }
       };
     },
@@ -1405,6 +1539,8 @@ async function route() {
     case 'compare-venues': return viewCompareVenues();
     case 'plan': return viewPlan(params);
     case 'invite': return viewInvite(parts[1]);
+    case 'verify': return viewVerify(parts[1]);
+    case 'agreement': return viewAgreement(parts[1]);
     case 'login': return viewLogin(params);
     case 'profile': return viewProfile();
     case 'vendor':

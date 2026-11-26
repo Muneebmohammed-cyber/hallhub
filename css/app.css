@@ -224,3 +224,8 @@ table.compare td { min-width: 150px; }
 details summary { list-style: none; } details summary::-webkit-details-marker { display: none; } details summary::before { content: '+ '; }
 details[open] summary::before { content: '– '; }
 @media print { .inv-card { box-shadow: none; border: 1px solid #ddd; } }
+
+/* booking protection */
+.shield { font-size: .86rem; line-height: 1.5; padding: 12px 14px; border-radius: var(--r); background: #FBF3E4; color: var(--ink); box-shadow: inset 3px 0 0 #C98A2B; }
+.shield a { font-weight: 600; text-decoration: underline; }
+.agreement h3 { font-size: 1rem; }

@@ -7,6 +7,12 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
 - **Search by date and slot:** pick a district, date, slot (morning 7 am–3 pm, evening 4 pm–11 pm, or full day) and guest count. You only see halls that are free and big enough.
 - **Filters:** venue type, town, AC or non-AC, catering rule (outside caterers allowed or in-house only), parking, price per slot, rating, verified only. Sort by popularity, rating, price or capacity.
 - **Venue page:** seating, dining and parking capacity, AC, catering rule, bridal rooms, facilities, hall rent per slot, a live availability calendar, Google Maps link, WhatsApp and call buttons, booking policies.
+- **Booking protection (Kerala pain points):**
+  - **Booking code + public check page.** Every confirmed booking, including the owner's phone bookings, gets a code like HH-4F9K2A. Anyone can check it at #/verify before paying, which helps against fake payment links and QR codes.
+  - **Digital booking agreement:** hall, parties, date and slot, agreed total, advance and balance, overtime, cleaning and generator charges, what's included, the refund schedule, and monsoon terms. Print, save as PDF or share.
+  - **Date transfer.** A family that can't use its date offers it to other families. It shows on the hall's calendar and under "Dates released by other families" on the home screen. When another family requests it, the owner releases the original booking with one tap and quotes the new family. This is for halls that refund the advance only when someone else takes the date.
+  - **Monsoon readiness.** Owners say whether the hall or its approach road floods and state a rain policy. Halls show "Monsoon-ready". Bookings in June–September get a monsoon plan with backup halls free that day.
+  - **Scam warning** on booking screens: pay only inside HallHub or at the hall's counter.
 - **Plan my event:** enter event, district, guests, budget, a preferred date and how flexible you are. A grid shows every hall that fits and which nearby dates are free, sorted by real total cost, with "in budget" flags.
 - **True total cost on every hall page:** rent + food for your guests + overtime electricity + cleaning + generator + GST + decoration, with a per-guest figure and a checklist of questions to ask before paying.
 - **Compare up to 3 halls side by side** (free on your date, estimated total, capacity, parking, AC, catering rules, extra charges, cancellation terms) and **ask family on WhatsApp** with one tap.

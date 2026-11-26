@@ -7,16 +7,16 @@ import { buildSeedVendors, buildSeedBookings, buildRealHalls, buildSeedRegister 
 export let db, auth;
 
 if (DEMO_MODE) {
-  const KEY = 'hh_demo_db_v6';
+  const KEY = 'hh_demo_db_v7';
   const load = () => JSON.parse(localStorage.getItem(KEY) || 'null');
   const persist = (s) => localStorage.setItem(KEY, JSON.stringify(s));
   let state = load();
   if (!state) {
-    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, slots: {}, register: {} };
+    state = { users: {}, vendors: {}, enquiries: {}, quotations: {}, events: {}, slots: {}, register: {}, verifications: {}, transfers: {} };
     buildSeedVendors().forEach((v) => { state.vendors[v.id] = v; });
     buildRealHalls().forEach((v) => { state.vendors[v.id] = v; });
     buildSeedBookings().forEach((b) => { state.slots[b.id] = b; });
-    const sr = buildSeedRegister(); sr.register.forEach((r) => { state.register[r.id] = r; }); sr.slots.forEach((b) => { state.slots[b.id] = b; });
+    const sr = buildSeedRegister(); sr.register.forEach((r) => { state.register[r.id] = r; const code = 'HH-' + r.id.replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase(); state.verifications[code] = { id: code, code, venueId: r.venueId, venueName: 'Sree Lakshmi Auditorium', date: r.date, slot: r.slot, customerInitials: r.customerName.split(' ').map((w) => w[0] + '.').join(' '), status: 'confirmed', source: 'register' }; }); sr.slots.forEach((b) => { state.slots[b.id] = b; });
     state.users.demo_customer = { id: 'demo_customer', name: 'Demo Customer', phone: '+91 90000 00001', role: 'customer', isDemo: true };
     state.users.demo_vendor = { id: 'demo_vendor', name: 'Demo Vendor', phone: '+91 90000 01000', role: 'vendor', isDemo: true };
     state.users.demo_admin = { id: 'demo_admin', name: 'Demo Admin', role: 'admin', isDemo: true };
