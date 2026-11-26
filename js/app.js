@@ -3,6 +3,8 @@ import { DEMO_MODE } from './config.js';
 import { DISTRICTS, CATEGORIES, CATEGORY_GROUPS, EVENT_TYPES, TRADITIONS, SEED_REVIEWS, catById, districtById, buildSeedVendors, buildSeedBookings, buildRealHalls, CORRIDORS, isVenue, SLOTS, slotById, halvesOf, slotFree, AC_TYPES, CATERING_RULES, AMENITIES } from './data.js';
 import { t, getLang, setLang, nameOf } from './i18n.js';
 import { coverURL, icon } from './art.js';
+// In the Android app, printing goes through Android's print service (print or save as PDF).
+if (window.HallHubAndroid) window.print = () => window.HallHubAndroid.print();
 const NAV_ICON = { home: 'home', explore: 'search', events: 'events', bookings: 'bookings', profile: 'profile', dashboard: 'dashboard', enquiries: 'enquiries', calendar: 'calendar', services: 'services', venue: 'venue', venues: 'venues', Customers: 'customers', register: 'calendar' };
 
 // ---------- helpers ----------

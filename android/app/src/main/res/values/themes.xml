@@ -1,0 +1,9 @@
+<resources>
+    <style name="HallHubTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/page</item>
+        <item name="android:statusBarColor">@color/graphite</item>
+        <item name="android:navigationBarColor">@color/page</item>
+    </style>
+    <color name="graphite">#1A1D23</color>
+    <color name="page">#F7F6F3</color>
+</resources>
