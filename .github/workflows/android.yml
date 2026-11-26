@@ -27,16 +27,16 @@ jobs:
       - name: Copy the APK to the download folder
         run: |
           mkdir -p download
-          cp android/app/build/outputs/apk/debug/app-debug.apk download/HallHub.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk download/FarshadKu.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: HallHub-apk
-          path: download/HallHub.apk
-      - name: Publish the APK on the HallHub site
+          name: FarshadKu-apk
+          path: download/FarshadKu.apk
+      - name: Publish the APK on the site
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add download/HallHub.apk
-          git commit -m "Build HallHub.apk (run ${{ github.run_number }})" || exit 0
+          git add -A download
+          git commit -m "Build FarshadKu.apk (run ${{ github.run_number }})" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main

@@ -229,7 +229,7 @@ export function buildRealHalls() {
       id: `real_${slug}`, ownerId: '', isDemo: false, isReal: true, claimed: false, corridor: 'chavakkad-ponnani',
       businessName: name, category, district, town, address: `${locality}, ${districtById(district).en}, Kerala`,
       placeId, mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-      description: `${name} is ${({ auditorium: 'an auditorium', convention: 'a convention centre', 'community-hall': 'a community hall' })[category]} in ${locality}. This hall hasn’t joined HallHub yet, so its capacity, rent and free dates aren’t listed. Contact the hall directly, or ask the owner to claim this listing.`,
+      description: `${name} is ${({ auditorium: 'an auditorium', convention: 'a convention centre', 'community-hall': 'a community hall' })[category]} in ${locality}. This hall hasn’t joined Farshad Ku yet, so its capacity, rent and free dates aren’t listed. Contact the hall directly, or ask the owner to claim this listing.`,
       seating: 0, dining: 0, parking: 0, rooms: 0, ac: '', catering: '', amenities: [], slotPrices: null,
       startingPrice: 0, priceUnit: '', rating: 0, reviewCount: 0, serviceDistricts: [district], policies: '', traditions: [],
       palette: PALETTES[(i + 3) % PALETTES.length], portfolio: [], status: 'approved', verified: false, featured: false,

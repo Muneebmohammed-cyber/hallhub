@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
                 if (req.isForMainFrame()) {
                     view.loadDataWithBaseURL(null,
                         "<html><body style='font-family:sans-serif;background:#F7F6F3;color:#17191E;padding:40px 24px'>"
-                        + "<h2>You're offline</h2><p>HallHub needs an internet connection. Check your connection, then tap below.</p>"
+                        + "<h2>You're offline</h2><p>Farshad Ku needs an internet connection. Check your connection, then tap below.</p>"
                         + "<p><a href='" + HOME + "' style='display:inline-block;background:#1A1D23;color:#fff;padding:12px 18px;border-radius:12px;text-decoration:none'>Try again</a></p></body></html>",
                         "text/html", "utf-8", null);
                 }
@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
         public void print() {
             runOnUiThread(() -> {
                 PrintManager pm = (PrintManager) getSystemService(PRINT_SERVICE);
-                if (pm != null) pm.print("HallHub document", web.createPrintDocumentAdapter("HallHub document"), new PrintAttributes.Builder().build());
+                if (pm != null) pm.print("Farshad Ku document", web.createPrintDocumentAdapter("Farshad Ku document"), new PrintAttributes.Builder().build());
             });
         }
     }

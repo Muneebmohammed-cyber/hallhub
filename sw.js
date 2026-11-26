@@ -1,5 +1,5 @@
 // Network-first service worker: works offline for the app shell, always fetches fresh data.
-const CACHE = 'hallhub-v8';
+const CACHE = 'hallhub-v9';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/data.js', 'js/i18n.js', 'js/config.js', 'js/art.js', 'icon.svg'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });

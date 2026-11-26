@@ -1,4 +1,4 @@
-# HallHub — Book Auditoriums & Wedding Halls in Kerala (Phase 1 MVP)
+# Farshad Ku — Book Auditoriums & Wedding Halls in Kerala (Phase 1 MVP)
 
 A mobile-first app you can install on a phone (PWA) for finding and booking **auditoriums, convention centres, community halls and wedding venues** across all 14 districts of Kerala. Photographers, sadya caterers, decorators and other services are listed as add-ons.
 Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / English. Firebase backend (Auth + Firestore).
@@ -12,7 +12,7 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
   - **Digital booking agreement:** hall, parties, date and slot, agreed total, advance and balance, overtime, cleaning and generator charges, what's included, the refund schedule, and monsoon terms. Print, save as PDF or share.
   - **Date transfer.** A family that can't use its date offers it to other families. It shows on the hall's calendar and under "Dates released by other families" on the home screen. When another family requests it, the owner releases the original booking with one tap and quotes the new family. This is for halls that refund the advance only when someone else takes the date.
   - **Monsoon readiness.** Owners say whether the hall or its approach road floods and state a rain policy. Halls show "Monsoon-ready". Bookings in June–September get a monsoon plan with backup halls free that day.
-  - **Scam warning** on booking screens: pay only inside HallHub or at the hall's counter.
+  - **Scam warning** on booking screens: pay only inside Farshad Ku or at the hall's counter.
 - **Plan my event:** enter event, district, guests, budget, a preferred date and how flexible you are. A grid shows every hall that fits and which nearby dates are free, sorted by real total cost, with "in budget" flags.
 - **True total cost on every hall page:** rent + food for your guests + overtime electricity + cleaning + generator + GST + decoration, with a per-guest figure and a checklist of questions to ask before paying.
 - **Compare up to 3 halls side by side** (free on your date, estimated total, capacity, parking, AC, catering rules, extra charges, cancellation terms) and **ask family on WhatsApp** with one tap.
@@ -24,8 +24,8 @@ Three roles: **customer**, **venue owner / vendor**, **admin**. Malayalam / Engl
 - **Booking request → quotation → negotiation → confirmation:** the venue sends a quotation (pre-filled with the slot rent and a 25% advance). The customer accepts, asks for a lower price, or declines, and every version is kept.
 - **No double bookings:** when a customer accepts, the slot is locked in the database (one record per venue, date and half-day, which can be created but never overwritten). If two people try to take the same slot, the second gets "this slot was just booked".
 - **Owner register (replaces the paper booking diary):**
-  - Add phone and walk-in bookings with customer, mobile, event, guests, rent, extra charges and advance. The slot is blocked for HallHub customers straight away.
-  - Confirmed HallHub bookings appear in the register automatically.
+  - Add phone and walk-in bookings with customer, mobile, event, guests, rent, extra charges and advance. The slot is blocked for Farshad Ku customers straight away.
+  - Confirmed Farshad Ku bookings appear in the register automatically.
   - Record each payment (cash, UPI, bank transfer, cheque) and see the balance per booking.
   - Print a receipt for every payment or save it as PDF, and send it, a booking confirmation or a payment reminder on WhatsApp.
   - Cancel a booking to free the slot.
